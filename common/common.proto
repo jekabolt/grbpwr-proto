@@ -22,8 +22,8 @@ message Product {
     string description = 7;               
     // Product categories
     repeated string categories = 8;       
-    // Images of the product
-    repeated Image product_images = 9;    
+    // Medias of the product
+    repeated Media product_media = 9;    
   }
   
   message Price {
@@ -39,14 +39,23 @@ message Product {
     double sale = 5;  
   }
   
-  message Image {
-    // Full-size image URL
+  message Media {
+    // Full-size media URL
     string full_size = 1;   
-    // Thumbnail image URL
+    // Thumbnail media URL
     string thumbnail = 2;   
-    // Compressed image URL
-    string compressed = 3;  
-  }
+    // Compressed media URL
+    string compressed = 3;
+    // Object IDs of full-size, thumbnail and compressed media
+    repeated string object_ids = 5;
+  }  
+
+  message ListEntityMedia {
+    // Full-size media URL
+    string url = 1;
+    // Media last modified date
+    google.protobuf.Timestamp last_modified = 2;
+  }  
   
   message Size {
     // Quantity of size XXS available
