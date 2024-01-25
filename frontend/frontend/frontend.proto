@@ -2,9 +2,12 @@ syntax = "proto3";
 
 package frontend;
 
+import "common/archive.proto";
+import "common/dict.proto";
 import "common/filter.proto";
 import "common/hero.proto";
 import "common/order.proto";
+import "common/payment.proto";
 import "common/product.proto";
 import "google/api/annotations.proto";
 import "google/type/decimal.proto";
@@ -31,6 +34,18 @@ service FrontendService {
   rpc SubmitOrder(SubmitOrderRequest) returns (SubmitOrderResponse) {
     option (google.api.http) = {
       post: "/api/frontend/order/new"
+      body: "*"
+    };
+  }
+  // Retrieves an order by its ID
+  rpc GetOrderByUUID(GetOrderByUUIDRequest) returns (GetOrderByUUIDResponse) {
+    option (google.api.http) = {get: "/api/frontend/orders/{uuid}"};
+  }
+
+  // Marks order payment as complete
+  rpc OrderPaymentDone(OrderPaymentDoneRequest) returns (OrderPaymentDoneResponse) {
+    option (google.api.http) = {
+      post: "/api/frontend/order/{order_uuid}/payment-done"
       body: "*"
     };
   }
@@ -66,11 +81,23 @@ service FrontendService {
       body: "*"
     };
   }
+
+  // GetArchivesPaged retrieves paged archives.
+  rpc GetArchivesPaged(GetArchivesPagedRequest) returns (GetArchivesPagedResponse) {
+    option (google.api.http) = {get: "/api/frontend/archive/paged"};
+  }
+
+  // GetArchiveById retrieves an archive by ID.
+  rpc GetArchiveById(GetArchiveByIdRequest) returns (GetArchiveByIdResponse) {
+    option (google.api.http) = {get: "/api/frontend/archive/{id}"};
+  }
 }
 
 message GetHeroRequest {}
 message GetHeroResponse {
   common.HeroFull hero = 1;
+  common.Dictionary dictionary = 2;
+  common.CurrencyMap rates = 3;
 }
 
 message GetProductByNameRequest {
@@ -102,6 +129,21 @@ message SubmitOrderResponse {
   common.Order order = 1;
 }
 
+message GetOrderByUUIDRequest {
+  string uuid = 1;
+}
+
+message GetOrderByUUIDResponse {
+  common.OrderFull order = 1;
+}
+
+message OrderPaymentDoneRequest {
+  string order_uuid = 1;
+  common.PaymentInsert payment = 2;
+}
+
+message OrderPaymentDoneResponse {}
+
 message ApplyPromoCodeRequest {
   int32 order_id = 1;
   string promo_code = 2;
@@ -132,3 +174,21 @@ message UnsubscribeNewsletterRequest {
 }
 
 message UnsubscribeNewsletterResponse {}
+
+message GetArchivesPagedRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  common.OrderFactor order_factor = 3;
+}
+
+message GetArchivesPagedResponse {
+  repeated common.ArchiveFull archives = 1;
+}
+
+message GetArchiveByIdRequest {
+  int32 id = 1;
+}
+
+message GetArchiveByIdResponse {
+  common.ArchiveFull archive = 1;
+}
