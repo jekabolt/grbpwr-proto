@@ -43,10 +43,32 @@ service FrontendService {
     option (google.api.http) = {get: "/api/frontend/orders/{uuid}"};
   }
 
-  // Marks order payment as complete
+  rpc ValidateOrderItemsInsert(ValidateOrderItemsInsertRequest) returns (ValidateOrderItemsInsertResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/orders/validate-items"
+      body: "*"
+    };
+  }
+
+  rpc ValidateOrderByUUID(ValidateOrderByUUIDRequest) returns (ValidateOrderByUUIDResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/orders/validate/{uuid}"
+      body: "*"
+    };
+  }
+
+  // Generate an invoice for the order or return the existing one
   rpc GetOrderInvoice(GetOrderInvoiceRequest) returns (GetOrderInvoiceResponse) {
     option (google.api.http) = {
       post: "/api/frontend/order/{order_id}/{payment_method}/invoice"
+      body: "*"
+    };
+  }
+
+  // CheckCryptoPayment checks the crypto payment if it has been received and updates the order status if it has been received
+  rpc CheckCryptoPayment(CheckCryptoPaymentRequest) returns (CheckCryptoPaymentResponse) {
+    option (google.api.http) = {
+      post: "/api/frontend/order/check/{order_id}"
       body: "*"
     };
   }
@@ -138,6 +160,23 @@ message GetOrderByUUIDResponse {
   common.OrderFull order = 1;
 }
 
+message ValidateOrderItemsInsertRequest {
+  repeated common.OrderItemInsert items = 1;
+}
+
+message ValidateOrderItemsInsertResponse {
+  repeated common.OrderItemInsert items = 1;
+  google.type.Decimal subtotal = 2;
+}
+
+message ValidateOrderByUUIDRequest {
+  string uuid = 1;
+}
+
+message ValidateOrderByUUIDResponse {
+  common.OrderFull order = 1;
+}
+
 message GetOrderInvoiceRequest {
   int32 order_id = 1;
   common.PaymentMethodNameEnum payment_method = 2;
@@ -146,6 +185,15 @@ message GetOrderInvoiceRequest {
 message GetOrderInvoiceResponse {
   google.protobuf.Timestamp expired_at = 1;
   common.PaymentInsert payment = 2;
+}
+
+message CheckCryptoPaymentRequest {
+  int32 order_id = 1;
+  common.PaymentMethodNameEnum payment_method = 2;
+}
+
+message CheckCryptoPaymentResponse {
+  common.OrderFull order = 1;
 }
 
 message ApplyPromoCodeRequest {
