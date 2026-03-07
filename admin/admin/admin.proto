@@ -673,6 +673,8 @@ message MetricWithComparison {
   google.type.Decimal value = 1;
   google.type.Decimal compare_value = 2;
   double change_pct = 3;
+  // When true, a negative change is good (e.g. refund rate, bounce rate). Frontend should show green for decrease, red for increase.
+  bool lower_is_better = 4;
 }
 
 message GeographyMetric {
