@@ -769,6 +769,9 @@ message MetricWithComparison {
   double change_pct = 3;
   // When true, a negative change is good (e.g. refund rate, bounce rate). Frontend should show green for decrease, red for increase.
   bool lower_is_better = 4;
+  // Absolute delta (current - previous) for rate metrics. For percentage/ratio metrics, this is the percentage point change (e.g., 5.0% → 3.0% = -2.0 pp).
+  // Frontend should prefer displaying this over change_pct for rate metrics to avoid misleading "rate-of-rates" semantics.
+  double change_absolute = 5;
 }
 
 message GeographyMetric {
@@ -832,6 +835,7 @@ message CLVStats {
   google.type.Decimal mean = 1;
   google.type.Decimal median = 2;
   google.type.Decimal p90 = 3;
+  int32 sample_size = 4;
 }
 
 message TimeSeriesPoint {
