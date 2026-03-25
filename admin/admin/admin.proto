@@ -772,6 +772,8 @@ message MetricWithComparison {
   // Absolute delta (current - previous) for rate metrics. For percentage/ratio metrics, this is the percentage point change (e.g., 5.0% → 3.0% = -2.0 pp).
   // Frontend should prefer displaying this over change_pct for rate metrics to avoid misleading "rate-of-rates" semantics.
   double change_absolute = 5;
+  // Optional tooltip/caveat text to clarify metric interpretation (e.g., data limitations, calculation notes).
+  string caveat = 6;
 }
 
 message GeographyMetric {
