@@ -1209,6 +1209,7 @@ message ListModelsRequest {
 
 message ListModelsResponse {
   repeated common.Model models = 1;
+  int32 total = 2; // total number of models, ignoring pagination
 }
 
 message GetModelRequest {
@@ -1252,6 +1253,7 @@ message ListFittingsRequest {
 
 message ListFittingsResponse {
   repeated common.Fitting fittings = 1;
+  int32 total = 2; // total number of matching fittings, ignoring pagination
 }
 
 message GetFittingRequest {
