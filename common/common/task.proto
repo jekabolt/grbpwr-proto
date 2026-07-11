@@ -50,41 +50,44 @@ enum TaskPriority {
   TASK_PRIORITY_URGENT = 4;
 }
 
-// TaskInsert is the writable payload for a task (create/update). Server-managed
-// fields (id, position, created_by, timestamps, resolved media) live on Task,
-// not here.
+// TaskInsert is the writable CONTENT of a task (create/update). Placement on the
+// board — board, status, position — is deliberately NOT here: it is set at
+// AddTask and changed only via MoveTask, so a content edit can never silently
+// re-file a card into another lane/column or reorder it. Other server-managed
+// fields (id, created_by, timestamps, resolved media) also live on Task.
 message TaskInsert {
   string title = 1;                       // required
   string description = 2;                 // optional, free text / markdown
-  TaskBoard board = 3;                    // required (which department lane)
-  TaskStatus status = 4;                  // required (which column; new tasks usually TODO)
-  string assignee = 5;                    // AdminAccount.username; "" = unassigned
-  TaskPriority priority = 6;              // TASK_PRIORITY_UNKNOWN = unset
-  google.protobuf.Timestamp due_date = 7; // optional; unset = no deadline
-  repeated string labels = 8;             // freeform lightweight tags within a board (client/list filtering)
-  repeated int32 media_ids = 9;           // attached reference images/files via the existing media bucket
+  string assignee = 3;                    // AdminAccount.username; "" = unassigned
+  TaskPriority priority = 4;              // TASK_PRIORITY_UNKNOWN = unset
+  google.protobuf.Timestamp due_date = 5; // optional; unset = no deadline
+  repeated string labels = 6;             // freeform lightweight tags within a board (client/list filtering)
+  repeated int32 media_ids = 7;           // attached reference images/files via the existing media bucket
 
   // Optional typed links to existing admin entities (0 / "" = none). Follows the
   // fitting precedent (several nullable typed FKs, NOT a polymorphic entity_type
   // ref) so a card can deep-link to the artifact it is about while that artifact
   // keeps its own state machine (techcard stage/approval, fitting verdict, …).
   // Each target has a single-get RPC so the card can resolve a title/thumbnail.
-  int32 tech_card_id = 10; // техкарта — DEVELOPMENT/PRODUCTION anchor; GetTechCard
-  int32 product_id = 11;   // specific product / SKU / sample; GetProductByID
-  string order_uuid = 12;  // order needing action; GetOrderByUUID
-  int32 archive_id = 13;   // drop / timeline being prepared; GetArchiveByID
+  int32 tech_card_id = 8; // техкарта — DEVELOPMENT/PRODUCTION anchor; GetTechCard
+  int32 product_id = 9;   // specific product / SKU / sample; GetProductByID
+  string order_uuid = 10; // order needing action; GetOrderByUUID
+  int32 archive_id = 11;  // drop / timeline being prepared; GetArchiveByID
 }
 
-// Task is a stored kanban card with server-managed fields and resolved media
-// (same id + Insert + resolved-media + timestamps shape as common.Fitting).
+// Task is a stored kanban card: its content (TaskInsert), its placement on the
+// board (board/status/position — server-managed, set by AddTask and mutated only
+// by MoveTask), resolved media, and server-stamped identity/timestamps.
 message Task {
   int32 id = 1;
-  TaskInsert task = 2;
-  int32 position = 3;                       // order within its (board,status) column; managed by MoveTask
-  repeated MediaFull media = 4;             // resolved from task.media_ids for display
-  string created_by = 5;                    // AdminAccount.username, set from the caller's JWT
-  google.protobuf.Timestamp created_at = 6;
-  google.protobuf.Timestamp updated_at = 7;
+  TaskInsert task = 2;                       // content
+  TaskBoard board = 3;                       // placement: department lane; set by AddTask, changed by MoveTask
+  TaskStatus status = 4;                     // placement: kanban column; set by AddTask, changed by MoveTask
+  int32 position = 5;                        // placement: order within its (board,status) column; managed by AddTask/MoveTask
+  repeated MediaFull media = 6;              // resolved from task.media_ids for display
+  string created_by = 7;                     // AdminAccount.username, set from the caller's JWT
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
 }
 
 // TaskCommentInsert is the writable payload for a comment. author is set

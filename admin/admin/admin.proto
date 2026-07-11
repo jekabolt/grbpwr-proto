@@ -365,8 +365,9 @@ service AdminService {
   // ordering as fitting/models: GET /task/list is declared AFTER GET /task/{id}
   // so it is not shadowed.
 
-  // AddTask creates a new kanban task. Server sets created_by (from JWT) and
-  // appends it to the end of its (board,status) column (position).
+  // AddTask creates a new kanban task from its content plus placement (target
+  // board + optional initial column). Server sets created_by (from JWT) and
+  // appends the card to the end of its (board,status) column (position).
   rpc AddTask(AddTaskRequest) returns (AddTaskResponse) {
     option (google.api.http) = {
       post: "/api/admin/task/add"
@@ -379,9 +380,9 @@ service AdminService {
     option (google.api.http) = {get: "/api/admin/task/{id}"};
   }
 
-  // UpdateTask updates a task's editable fields (title, description, board,
-  // assignee, priority, due_date, product_id). Column moves/reordering go
-  // through MoveTask, not here.
+  // UpdateTask replaces a task's content (title, description, assignee, priority,
+  // due_date, labels, media, entity links). Placement — board, column (status),
+  // ordering — is NOT touched here; it changes only through MoveTask.
   rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse) {
     option (google.api.http) = {
       post: "/api/admin/task/update"
@@ -389,9 +390,10 @@ service AdminService {
     };
   }
 
-  // MoveTask changes a task's column (status) and/or its order within a column
-  // (position). This is the drag-and-drop endpoint; the server re-sequences
-  // sibling positions as needed.
+  // MoveTask changes a task's placement: its board, its column (status), and/or
+  // its order within a column (position) — a card can be dragged across columns
+  // and across boards. This is the drag-and-drop endpoint; the server
+  // re-sequences sibling positions as needed.
   rpc MoveTask(MoveTaskRequest) returns (MoveTaskResponse) {
     option (google.api.http) = {
       post: "/api/admin/task/move"
@@ -1617,7 +1619,9 @@ message DeleteFittingResponse {}
 // TASK MANAGER
 
 message AddTaskRequest {
-  common.TaskInsert task = 1;
+  common.TaskInsert task = 1;   // content
+  common.TaskBoard board = 2;   // required: the department lane the card is created in
+  common.TaskStatus status = 3; // initial column; TASK_STATUS_UNKNOWN = server default (TODO)
 }
 
 message AddTaskResponse {
@@ -1634,15 +1638,16 @@ message GetTaskResponse {
 
 message UpdateTaskRequest {
   int32 id = 1;
-  common.TaskInsert task = 2;
+  common.TaskInsert task = 2; // content only; board/status/position change via MoveTask, not here
 }
 
 message UpdateTaskResponse {}
 
 message MoveTaskRequest {
   int32 id = 1;
-  common.TaskStatus status = 2; // target column
-  int32 position = 3;           // target index within the column (0-based)
+  common.TaskBoard board = 2;   // target board; TASK_BOARD_UNKNOWN = keep current board
+  common.TaskStatus status = 3; // target column
+  int32 position = 4;           // target index within the column (0-based)
 }
 
 message MoveTaskResponse {}
