@@ -168,6 +168,15 @@ service AdminService {
     };
   }
 
+  // SetShipmentActualCost records the actual carrier invoice (and optional return-leg cost)
+  // for an order's shipment, so contribution margin can use real logistics cost.
+  rpc SetShipmentActualCost(SetShipmentActualCostRequest) returns (SetShipmentActualCostResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/order/shipment/actual-cost"
+      body: "*"
+    };
+  }
+
   // Retrieves orders by their status payment method or email
   rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse) {
     option (google.api.http) = {
@@ -612,6 +621,15 @@ service AdminService {
   rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse) {
     option (google.api.http) = {
       post: "/api/admin/settings/update"
+      body: "*"
+    };
+  }
+
+  // UpsertPaymentMethodFees sets the estimated processing-fee model (percent + fixed) per
+  // payment method, used to estimate the fee of orders without a captured Stripe fee.
+  rpc UpsertPaymentMethodFees(UpsertPaymentMethodFeesRequest) returns (UpsertPaymentMethodFeesResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/settings/payment-method-fees"
       body: "*"
     };
   }
@@ -3024,6 +3042,27 @@ message UpsertCostingFxRatesRequest {
 }
 
 message UpsertCostingFxRatesResponse {}
+
+// PaymentMethodFee is the estimated processing-fee model of a payment method.
+message PaymentMethodFee {
+  common.PaymentMethodNameEnum payment_method = 1;
+  google.type.Decimal fee_pct = 2; // percent of the order total (0..100)
+  google.type.Decimal fee_fixed = 3; // fixed amount per order, base currency
+}
+
+message UpsertPaymentMethodFeesRequest {
+  repeated PaymentMethodFee fees = 1;
+}
+
+message UpsertPaymentMethodFeesResponse {}
+
+message SetShipmentActualCostRequest {
+  string order_uuid = 1;
+  google.type.Decimal actual_cost = 2; // actual carrier invoice, base currency
+  google.type.Decimal return_shipping_cost = 3; // optional reverse-logistics cost, base currency
+}
+
+message SetShipmentActualCostResponse {}
 
 // ADMIN ACCOUNTS (RBAC)
 
