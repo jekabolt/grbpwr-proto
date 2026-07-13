@@ -25,11 +25,11 @@ option go_package = "github.com/jekabolt/grbpwr-manager/proto/gen/common;common"
 enum TaskBoard {
   TASK_BOARD_UNKNOWN = 0;
   TASK_BOARD_DEVELOPMENT = 1; // портной/конструктор — разработка вещей (образцы, техкарты)
-  TASK_BOARD_DESIGN = 2;      // дизайн
-  TASK_BOARD_MARKETING = 3;   // маркетинг
-  TASK_BOARD_PRODUCTION = 4;  // производство / пошив партии
-  TASK_BOARD_SOURCING = 5;    // закупка тканей и фурнитуры, поставщики
-  TASK_BOARD_CONTENT = 6;     // съёмка / контент / подготовка дропа
+  TASK_BOARD_DESIGN = 2; // дизайн
+  TASK_BOARD_MARKETING = 3; // маркетинг
+  TASK_BOARD_PRODUCTION = 4; // производство / пошив партии
+  TASK_BOARD_SOURCING = 5; // закупка тканей и фурнитуры, поставщики
+  TASK_BOARD_CONTENT = 6; // съёмка / контент / подготовка дропа
 }
 
 // TaskStatus is the kanban column. A drag between columns is a status change.
@@ -56,13 +56,13 @@ enum TaskPriority {
 // re-file a card into another lane/column or reorder it. Other server-managed
 // fields (id, created_by, timestamps, resolved media) also live on Task.
 message TaskInsert {
-  string title = 1;                       // required
-  string description = 2;                 // optional, free text / markdown
-  string assignee = 3;                    // AdminAccount.username; "" = unassigned
-  TaskPriority priority = 4;              // TASK_PRIORITY_UNKNOWN = unset
+  string title = 1; // required
+  string description = 2; // optional, free text / markdown
+  string assignee = 3; // AdminAccount.username; "" = unassigned
+  TaskPriority priority = 4; // TASK_PRIORITY_UNKNOWN = unset
   google.protobuf.Timestamp due_date = 5; // optional; unset = no deadline
-  repeated string labels = 6;             // freeform lightweight tags within a board (client/list filtering)
-  repeated int32 media_ids = 7;           // attached reference images/files via the existing media bucket
+  repeated string labels = 6; // freeform lightweight tags within a board (client/list filtering)
+  repeated int32 media_ids = 7; // attached reference images/files via the existing media bucket
 
   // Optional typed links to existing admin entities (0 / "" = none). Follows the
   // fitting precedent (several nullable typed FKs, NOT a polymorphic entity_type
@@ -70,10 +70,10 @@ message TaskInsert {
   // keeps its own state machine (techcard stage/approval, fitting verdict, …).
   // Each target has a single-get RPC so the card can resolve a title/thumbnail.
   int32 tech_card_id = 8; // техкарта — DEVELOPMENT/PRODUCTION anchor; GetTechCard
-  int32 product_id = 9;   // specific product / SKU / sample; GetProductByID
+  int32 product_id = 9; // specific product / SKU / sample; GetProductByID
   string order_uuid = 10; // order needing action; GetOrderByUUID
-  int32 archive_id = 11;  // drop / timeline being prepared; GetArchiveByID
-  int32 fitting_id = 12;  // примерка — try-on session this card is about; GetFitting
+  int32 archive_id = 11; // drop / timeline being prepared; GetArchiveByID
+  int32 fitting_id = 12; // примерка — try-on session this card is about; GetFitting
   int32 production_run_id = 14; // партия — production run this card is about; GetProductionRun
   int32 sample_id = 15; // сэмпл — sample this card is about; GetSample (new-flow NF-04)
 
@@ -101,12 +101,12 @@ message TaskChecklistItem {
 // by MoveTask), resolved media, and server-stamped identity/timestamps.
 message Task {
   int32 id = 1;
-  TaskInsert task = 2;                       // content
-  TaskBoard board = 3;                       // placement: department lane; set by AddTask, changed by MoveTask
-  TaskStatus status = 4;                     // placement: kanban column; set by AddTask, changed by MoveTask
-  int32 position = 5;                        // placement: order within its (board,status) column; managed by AddTask/MoveTask
-  repeated MediaFull media = 6;              // resolved from task.media_ids for display
-  string created_by = 7;                     // AdminAccount.username, set from the caller's JWT
+  TaskInsert task = 2; // content
+  TaskBoard board = 3; // placement: department lane; set by AddTask, changed by MoveTask
+  TaskStatus status = 4; // placement: kanban column; set by AddTask, changed by MoveTask
+  int32 position = 5; // placement: order within its (board,status) column; managed by AddTask/MoveTask
+  repeated MediaFull media = 6; // resolved from task.media_ids for display
+  string created_by = 7; // AdminAccount.username, set from the caller's JWT
   google.protobuf.Timestamp created_at = 8;
   google.protobuf.Timestamp updated_at = 9;
   // Soft-archive: set = the card is archived (hidden from the board and default
