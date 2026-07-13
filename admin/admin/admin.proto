@@ -2119,7 +2119,9 @@ message ListSamplesRequest {
   int32 limit = 1;
   int32 offset = 2;
   common.OrderFactor order_factor = 3;
-  int32 tech_card_id = 4; // required
+  int32 tech_card_id = 4; // 0 = all styles (cross-style «sewing queue»); >0 = one style's samples
+  string status = 5; // optional filter: planned | in_sewing | done | scrapped ("" = any)
+  string purpose = 6; // optional filter: proto | fit | sms | pp ("" = any)
 }
 
 message ListSamplesResponse {
@@ -3903,6 +3905,8 @@ message ListMaterialMovementsRequest {
   int32 production_run_id = 4;
   int32 sample_id = 5;
   common.MaterialMovementType movement_type = 6;
+  string occurred_from = 7; // optional inclusive lower bound on occurred_at date, YYYY-MM-DD ("" = open)
+  string occurred_to = 8; // optional inclusive upper bound on occurred_at date, YYYY-MM-DD ("" = open)
 }
 
 message ListMaterialMovementsResponse {

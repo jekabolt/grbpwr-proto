@@ -619,10 +619,12 @@ message TechCardInsert {
   //   moodboard_media — mood / inspiration / reference / fabric-swatch photos (design intent)
   //   technical_media — flat sketches used in construction (front / back / detail / lining / preview)
   // Construction consumes ONLY technical_media. Each item's `kind` sub-classifies within its
-  // list. Both are full-replace on update; callouts pin onto technical_media by media_id.
+  // list. Both are full-replace on update. A callout pins onto ANY media_id on the card — moodboard
+  // OR technical (the backend does not restrict the category), so at the idea stage a callout can pin
+  // onto a moodboard/reference image before any technical sketch exists.
   repeated TechCardMediaItem moodboard_media = 55;
   repeated TechCardMediaItem technical_media = 56;
-  repeated TechCardCallout callouts = 33; // sketch callouts (pin onto technical_media)
+  repeated TechCardCallout callouts = 33; // sketch callouts (pin onto any moodboard or technical media by media_id)
   repeated TechCardRevision revisions = 34; // revision log
 
   // materials (Phase 2): bill of materials (article catalog) and colourways (recipes).
