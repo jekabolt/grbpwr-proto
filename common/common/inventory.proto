@@ -45,7 +45,7 @@ message MaterialMovement {
   google.type.Decimal unit_cost_base = 9; // costing:read only
   int32 production_run_id = 10; // 0 = none
   int32 sample_id = 11; // 0 = none
-  int32 tech_card_id = 12; // 0 = none
+  int32 tech_card_id = 12; // owning style, denormalised from the run/sample at issue time (0 = none); filter movements by style. Derived, not an independent issue target.
   string lot = 13;
   string supplier_doc = 14;
   string reason = 15;
