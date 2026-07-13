@@ -320,6 +320,32 @@ service AdminService {
     };
   }
 
+  // UpsertEmployee inserts (id==0) or updates an employee-registry row — the person behind a salary
+  // OpexRecurring template (gap-07 v2 A). Requires analytics:write.
+  rpc UpsertEmployee(UpsertEmployeeRequest) returns (UpsertEmployeeResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/metrics/employees/upsert"
+      body: "*"
+    };
+  }
+
+  // ArchiveEmployee soft-archives an employee; linked recurring templates keep their employee_id.
+  // Requires analytics:write.
+  rpc ArchiveEmployee(ArchiveEmployeeRequest) returns (ArchiveEmployeeResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/metrics/employees/archive"
+      body: "*"
+    };
+  }
+
+  // ListEmployees returns registry rows (active-only unless include_archived). Requires analytics:read.
+  rpc ListEmployees(ListEmployeesRequest) returns (ListEmployeesResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/metrics/employees/list"
+      body: "*"
+    };
+  }
+
   // Cancels an order
   rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse) {
     option (google.api.http) = {
@@ -831,6 +857,23 @@ service AdminService {
   }
   rpc ListMaterialMovements(ListMaterialMovementsRequest) returns (ListMaterialMovementsResponse) {
     option (google.api.http) = {get: "/api/admin/inventory/movements"};
+  }
+
+  // UpsertPackagingBom full-replaces the global packaging recipe consumed on ship (gap-07 v2 B).
+  rpc UpsertPackagingBom(UpsertPackagingBomRequest) returns (UpsertPackagingBomResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/inventory/packaging-bom/upsert"
+      body: "*"
+    };
+  }
+  // ListPackagingBom returns the packaging recipe (material name/unit + per-order/per-item quantities).
+  rpc ListPackagingBom(ListPackagingBomRequest) returns (ListPackagingBomResponse) {
+    option (google.api.http) = {get: "/api/admin/inventory/packaging-bom"};
+  }
+
+  // ListMaterialLots returns a material's structured lots / rolls (gap-07 v2 D).
+  rpc ListMaterialLots(ListMaterialLotsRequest) returns (ListMaterialLotsResponse) {
+    option (google.api.http) = {get: "/api/admin/inventory/{material_id}/lots"};
   }
 
   // GetCostingFxRates returns the manual FX rates used to fold multi-currency tech-card
@@ -3297,6 +3340,7 @@ message OpexRecurringInsert {
   string active_from = 5; // any date in the first active month, YYYY-MM-DD; normalised to the 1st
   string active_to = 6; // empty = open-ended; else any date in the last active month
   string note = 7;
+  int32 employee_id = 8; // salary link to the employee registry (gap-07 v2 A); 0 = not a per-person salary
 }
 
 // OpexRecurring is a stored recurring OPEX template.
@@ -3327,6 +3371,50 @@ message ListOpexRecurringRequest {
 
 message ListOpexRecurringResponse {
   repeated OpexRecurring recurring = 1;
+}
+
+// EmployeeInsert is a person in the salary registry (gap-07 v2 A): identity + employment window + an
+// informational default monthly cost. The booked cost stays in the OPEX journal (an OpexRecurring
+// template with employee_id set); default_monthly_cost only pre-fills that template, it is never a
+// cost figure in any report.
+message EmployeeInsert {
+  string full_name = 1;
+  string role = 2; // free-text title (швея / конструктор / …)
+  string employment_start = 3; // YYYY-MM-DD, optional
+  string employment_end = 4; // YYYY-MM-DD, optional; empty = still employed
+  string default_currency = 5; // ISO 4217, optional
+  google.type.Decimal default_monthly_cost = 6; // informational default gross monthly cost, >= 0
+  string note = 7;
+}
+
+// Employee is a stored registry row.
+message Employee {
+  int32 id = 1;
+  EmployeeInsert employee = 2;
+  bool archived = 3;
+}
+
+message UpsertEmployeeRequest {
+  EmployeeInsert employee = 1;
+  int32 id = 2; // 0 = insert; else update the employee with this id
+}
+
+message UpsertEmployeeResponse {
+  int32 id = 1;
+}
+
+message ArchiveEmployeeRequest {
+  int32 id = 1;
+}
+
+message ArchiveEmployeeResponse {}
+
+message ListEmployeesRequest {
+  bool include_archived = 1;
+}
+
+message ListEmployeesResponse {
+  repeated Employee employees = 1;
 }
 
 // ==================== Review Messages ====================
@@ -3885,6 +3973,8 @@ message IssueMaterialStockRequest {
   bool is_return = 5; // true → return_* instead of issue_*
   string occurred_at = 6; // YYYY-MM-DD
   string comment = 7;
+  int32 product_id = 8; // optional colour-model for a run issue (gap-07 v2 C); 0 = shared/unattributed
+  int32 lot_id = 9; // optional structured lot to draw from / return to (gap-07 v2 D); 0 = none
 }
 
 message IssueMaterialStockResponse {
@@ -3936,6 +4026,39 @@ message ListMaterialMovementsRequest {
 message ListMaterialMovementsResponse {
   repeated common.MaterialMovement movements = 1;
   int32 total = 2;
+}
+
+// PackagingBomItem is one line of the global packaging recipe (gap-07 v2 B): a material consumed on
+// ship — qty_per_order once per shipment plus qty_per_item × the order's unit count. material_name /
+// material_unit are resolved server-side for display and ignored on write.
+message PackagingBomItem {
+  int32 material_id = 1;
+  string material_name = 2; // read-only (display)
+  string material_unit = 3; // read-only (display)
+  google.type.Decimal qty_per_order = 4; // consumed once per shipped order, >= 0
+  google.type.Decimal qty_per_item = 5; // consumed per unit in the order, >= 0
+  bool active = 6;
+}
+
+message UpsertPackagingBomRequest {
+  repeated PackagingBomItem items = 1; // full-replace: this set becomes the whole recipe
+}
+
+message UpsertPackagingBomResponse {}
+
+message ListPackagingBomRequest {}
+
+message ListPackagingBomResponse {
+  repeated PackagingBomItem items = 1;
+}
+
+message ListMaterialLotsRequest {
+  int32 material_id = 1;
+  bool include_archived = 2;
+}
+
+message ListMaterialLotsResponse {
+  repeated common.MaterialLot lots = 1;
 }
 
 // ADMIN ACCOUNTS (RBAC)
