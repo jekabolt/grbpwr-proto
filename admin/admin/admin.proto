@@ -702,15 +702,15 @@ service AdminService {
   }
 
   // PrepareShippingLabel returns the default parcel (weight/box derived from the
-  // order's tech cards, editable) plus the carrier's label capability, so the UI
-  // can pre-fill the label form before generating. Read-only.
+  // order's tech cards, editable) plus whether label generation is available, so the
+  // UI can pre-fill the label form before generating. Read-only.
   rpc PrepareShippingLabel(PrepareShippingLabelRequest) returns (PrepareShippingLabelResponse) {
     option (google.api.http) = {get: "/api/admin/fulfillment/label/{order_uuid}"};
   }
 
-  // GenerateShippingLabel generates a carrier label + tracking number (AfterShip
-  // Shipping) for the order's parcel, then performs the real shipped transition via
-  // the shared ship path. Returns the printable label URL. Gated by fulfillment perms.
+  // GenerateShippingLabel announces the order's parcel with Sendcloud (carrier label
+  // + tracking number), then performs the real shipped transition via the shared ship
+  // path. Returns the printable label URL. Gated by fulfillment perms.
   rpc GenerateShippingLabel(GenerateShippingLabelRequest) returns (GenerateShippingLabelResponse) {
     option (google.api.http) = {
       post: "/api/admin/fulfillment/label"
@@ -718,11 +718,12 @@ service AdminService {
     };
   }
 
-  // GetShippingRates quotes the order's parcel across all label-enabled carriers
-  // (rate shopping) so an operator can pick a service before generating. Read-only.
-  rpc GetShippingRates(GetShippingRatesRequest) returns (GetShippingRatesResponse) {
+  // GetShippingOptions fetches the shipping options (carrier + service + quote)
+  // available for the order's parcel via Sendcloud, so an operator can pick one
+  // before generating. Read-only.
+  rpc GetShippingOptions(GetShippingOptionsRequest) returns (GetShippingOptionsResponse) {
     option (google.api.http) = {
-      post: "/api/admin/fulfillment/label/rates"
+      post: "/api/admin/fulfillment/label/options"
       body: "*"
     };
   }
@@ -732,6 +733,16 @@ service AdminService {
   rpc VoidShippingLabel(VoidShippingLabelRequest) returns (VoidShippingLabelResponse) {
     option (google.api.http) = {
       post: "/api/admin/fulfillment/label/void"
+      body: "*"
+    };
+  }
+
+  // SchedulePickup books a carrier pickup from the warehouse origin for the day
+  // (Sendcloud's end-of-day handover equivalent; v3 has no generic manifest API).
+  // Gated by fulfillment perms.
+  rpc SchedulePickup(SchedulePickupRequest) returns (SchedulePickupResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/fulfillment/pickup"
       body: "*"
     };
   }
@@ -1366,10 +1377,10 @@ message UpdateProductSizeStockRequest {
 
 message UpdateProductSizeStockResponse {}
 
-// ProductCustoms is a product's international-shipping customs data. country_of_origin is ISO-3.
+// ProductCustoms is a product's international-shipping customs data. country_of_origin is ISO-2.
 message ProductCustoms {
   string hs_code = 1;
-  string country_of_origin = 2;
+  string country_of_origin = 2; // ISO 3166-1 alpha-2 (Sendcloud origin_country)
   string customs_description = 3;
 }
 
@@ -2631,44 +2642,46 @@ message PrepareShippingLabelResponse {
   repeated int32 missing_product_ids = 3; // products with no tech-card packaging weight
   int32 carrier_id = 4;
   string carrier_name = 5;
-  string service_type = 6; // carrier's default Postmen service_type
-  bool labels_enabled = 7; // carrier can generate labels (flag + shipper account set)
-  bool already_generated = 8; // a label already exists for this shipment
-  string label_url = 9; // existing label URL when already_generated
-  string tracking_code = 10; // existing tracking code, if any
+  bool labels_enabled = 6; // Sendcloud is configured (else operators enter tracking manually)
+  bool already_generated = 7; // a label already exists for this shipment
+  string label_url = 8; // existing label URL when already_generated
+  string tracking_code = 9; // existing tracking code, if any
 }
 
 message GenerateShippingLabelRequest {
   string order_uuid = 1;
   ShippingParcel parcel = 2; // after operator review/override
-  string service_type = 3; // optional; empty => carrier's default service_type
+  string shipping_option_code = 3; // optional; empty => Sendcloud shipping rules pick the carrier
 }
 
 message GenerateShippingLabelResponse {
   string tracking_code = 1;
-  string label_url = 2; // printable label PDF URL
-  string carrier_shipment_id = 3;
-  string service_type = 4;
+  string label_url = 2; // durable printable label PDF URL (our bucket)
+  string carrier_shipment_id = 3; // Sendcloud parcel id
+  string shipping_option_code = 4;
+  string carrier_name = 5;
 }
 
-// ShippingRate is one quoted carrier service option (rate shopping).
-message ShippingRate {
-  string carrier_slug = 1;
-  string service_type = 2;
-  string service_name = 3;
-  google.type.Decimal total_charge = 4;
-  string currency = 5;
-  int32 transit_days = 6; // 0 = carrier did not provide
-  string delivery_date = 7; // ISO date; empty if not provided
+// ShippingOption is one Sendcloud shipping option (carrier + service) with its quote. code is the
+// shipping_option_code passed back to GenerateShippingLabel to select it.
+message ShippingOption {
+  string code = 1;
+  string carrier_code = 2;
+  string carrier_name = 3;
+  string product_name = 4;
+  google.type.Decimal total_charge = 5;
+  string currency = 6;
+  int32 transit_days = 7; // 0 = carrier did not provide
+  string delivery_date = 8; // ISO date; empty if not provided
 }
 
-message GetShippingRatesRequest {
+message GetShippingOptionsRequest {
   string order_uuid = 1;
   ShippingParcel parcel = 2; // after operator review/override
 }
 
-message GetShippingRatesResponse {
-  repeated ShippingRate rates = 1;
+message GetShippingOptionsResponse {
+  repeated ShippingOption options = 1;
 }
 
 message VoidShippingLabelRequest {
@@ -2676,6 +2689,20 @@ message VoidShippingLabelRequest {
 }
 
 message VoidShippingLabelResponse {}
+
+message SchedulePickupRequest {
+  string carrier_code = 1; // Sendcloud carrier to collect (e.g. "dhl")
+  string date = 2; // pickup day, YYYY-MM-DD
+  int32 quantity = 3; // parcel count (default 1)
+  string from_time = 4; // optional pickup window start HH:MM:SS (default 09:00:00)
+  string to_time = 5; // optional pickup window end HH:MM:SS (default 17:00:00)
+}
+
+message SchedulePickupResponse {
+  string pickup_id = 1;
+  bool confirmed = 2;
+  string message = 3; // provider status
+}
 
 // SETTINGS
 
@@ -2744,9 +2771,6 @@ message AddShipmentCarrierRequest {
   bool allowed = 7;
   string aftership_slug = 8; // AfterShip courier slug (empty = no tracking API; timer-only auto-deliver)
   int32 auto_deliver_after_hours = 9; // timer safety-net window in hours (0 = server default)
-  string aftership_shipper_account_id = 10; // AfterShip Shipping shipper-account id (label generation)
-  string aftership_service_type = 11; // default Postmen service_type for generated labels
-  bool labels_enabled = 12; // enable carrier-generated labels for this carrier
 }
 
 message AddShipmentCarrierResponse {
@@ -2764,9 +2788,6 @@ message UpdateShipmentCarrierRequest {
   bool allowed = 8;
   string aftership_slug = 9; // AfterShip courier slug (empty = no tracking API; timer-only auto-deliver)
   int32 auto_deliver_after_hours = 10; // timer safety-net window in hours (0 = server default)
-  string aftership_shipper_account_id = 11; // AfterShip Shipping shipper-account id (label generation)
-  string aftership_service_type = 12; // default Postmen service_type for generated labels
-  bool labels_enabled = 13; // enable carrier-generated labels for this carrier
 }
 
 message UpdateShipmentCarrierResponse {}
