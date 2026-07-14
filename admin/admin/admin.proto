@@ -1500,6 +1500,10 @@ enum MetricsSection {
   METRICS_SECTION_MARGIN_BY_STYLE = 46; // task 15: margin rolled up to tech-card style
   METRICS_SECTION_COGS_STRUCTURE = 47; // task 15: cost-of-goods-sold component structure
   METRICS_SECTION_INVENTORY_VALUATION = 48; // task 16: cost frozen in stock + dead stock + write-offs
+  METRICS_SECTION_ORDER_VALUE_BANDS = 49; // analytics-v2 task 03: order-value distribution (upsell)
+  METRICS_SECTION_DELIVERY = 50; // analytics-v2 task 04: fulfilment durations + on-time rate
+  METRICS_SECTION_FORECAST = 51; // analytics-v2 task 06: month revenue forecast
+  METRICS_SECTION_PROFITABILITY = 52; // analytics-v2 task 07: profitability tab (CPO/CAC/LTV/CAC + assembly)
 }
 
 message GetMetricsRequest {
@@ -1562,6 +1566,76 @@ message GetMetricsResponse {
   repeated MarginByStyleRow margin_by_style = 49; // task 15
   repeated CogsStructureRow cogs_structure = 50; // task 15
   InventoryValuation inventory_valuation = 51; // task 16
+  repeated OrderValueBandRow order_value_bands = 52; // analytics-v2 task 03
+  DeliverySection delivery = 53; // analytics-v2 task 04
+  RevenueForecast revenue_forecast = 54; // analytics-v2 task 06
+  ProfitabilitySection profitability = 55; // analytics-v2 task 07
+}
+
+// --- analytics-v2 messages (mirrored from backend admin.proto; keep field numbers identical) ---
+
+message RevenueForecast {
+  google.protobuf.Timestamp month = 1; // first day of the forecast month
+  google.type.Decimal mtd_actual = 2; // net revenue so far this month
+  google.type.Decimal forecast = 3; // projected full-month net revenue (blend)
+  google.type.Decimal forecast_low = 4; // ~80% interval lower bound
+  google.type.Decimal forecast_high = 5;
+  google.type.Decimal run_rate = 6; // naive mtd/elapsed × days_in_month, for eyeballing
+  string method = 7; // "dow" | "dow+seasonal" | "closed" | "run_rate"
+  int32 elapsed_days = 8;
+  int32 remaining_days = 9;
+  google.type.Decimal last_year_month_total = 10; // 0 when no prior-year data
+  string caveat = 11;
+}
+
+message DeliverySection {
+  double avg_days_placed_to_shipped = 1;
+  double avg_days_shipped_to_delivered = 2;
+  double avg_days_placed_to_delivered = 3;
+  double median_days_placed_to_delivered = 4;
+  double on_time_rate_pct = 5; // delivered on/before the ETA date
+  int32 on_time_sample = 6; // orders with both a delivered timestamp and an ETA
+  double eta_coverage_pct = 7; // % of delivered orders that had an ETA set
+  double delivered_coverage_pct = 8; // % of shipped orders that reached delivered (survivorship gate)
+  int32 delivered_sample = 9; // orders with a usable delivered duration (durations denominator)
+  int32 shipped_sample = 10; // orders with a usable shipped duration
+  repeated TimeSeriesPoint avg_delivery_days_by_week = 11; // value=avg placed→delivered days, count=orders
+  string caveat = 12;
+}
+
+message OrderValueBandRow {
+  string label = 1; // e.g. "€0–50", "€500+"
+  google.type.Decimal from = 2; // inclusive lower edge (base currency)
+  google.type.Decimal to = 3; // exclusive upper edge; 0 = no upper bound
+  int32 orders = 4;
+  google.type.Decimal revenue = 5; // net revenue of orders in this band
+  double orders_share_pct = 6;
+  double revenue_share_pct = 7;
+  google.type.Decimal avg_order_value = 8;
+}
+
+message ProfitabilitySection {
+  MetricWithComparison gross_margin = 1; // costed revenue − COGS
+  MetricWithComparison gross_margin_pct = 2; // gross_margin / costed revenue × 100
+  double cost_coverage_pct = 3; // % of product revenue that has a cost set (trust gate for the margins)
+  MetricWithComparison total_discount = 4; // product-sale + promo-code discount (base currency)
+  MetricWithComparison product_sale_discount = 5;
+  MetricWithComparison promo_code_discount = 6;
+  MetricWithComparison discount_rate_pct = 7; // total discount / gross revenue × 100 (task 01)
+  MetricWithComparison contribution_margin = 8; // gross_margin − shipping − payment fees
+  MetricWithComparison cpo = 9; // marketing_spend / orders — 0 when has_spend=false
+  MetricWithComparison blended_cac = 10; // marketing_spend / new_customers — meaningful on monthly+ ranges
+  bool has_spend = 11; // false → cpo / blended_cac / ltv_cac_ratio are N/A (no media spend entered)
+  google.type.Decimal ltv = 12; // historical CLV mean (realized revenue per customer this period), not predictive
+  double ltv_cac_ratio = 13; // ltv / blended_cac — 0 = N/A
+  MetricWithComparison fulfilment_cost_per_order = 14; // (shipping + payment fees) / orders
+  MetricWithComparison refund_rate = 15; // refunded / gross revenue × 100
+  MetricWithComparison total_refunded = 16;
+  google.type.Decimal opex_total = 17; // day-pro-rated fixed costs over the period
+  google.type.Decimal marketing_spend = 18;
+  google.type.Decimal operating_result = 19; // contribution_margin − opex_total − marketing_spend
+  string opex_caveat = 20; // OPEX missing/uncosted or double-counted (same wording as the dashboard)
+  string caveat = 21; // spend is manual; LTV is historical
 }
 
 // --- Dashboard (decision-grade summary) ---
@@ -1738,6 +1812,28 @@ message CommerceCoreMetrics {
   repeated TimeSeriesPoint returning_customers_by_day_compare = 52;
   repeated TimeSeriesPoint shipped_by_day_compare = 53;
   repeated TimeSeriesPoint delivered_by_day_compare = 54;
+  MetricWithComparison unique_customers = 57; // analytics-v2 task 01: distinct buyer emails (net-revenue)
+  PeakDay peak_day = 58; // analytics-v2 task 01: highest-net-revenue calendar day
+  MetricWithComparison discount_rate_pct = 59; // analytics-v2 task 01: total discount / gross revenue × 100
+  NewVsReturningSplit new_vs_returning = 60; // analytics-v2 task 02
+}
+
+message PeakDay {
+  google.protobuf.Timestamp date = 1;
+  google.type.Decimal revenue = 2; // net revenue (base currency) on that day
+  int32 orders = 3; // net-revenue orders placed that day
+}
+
+message NewVsReturningSplit {
+  MetricWithComparison new_orders = 1;
+  MetricWithComparison new_revenue = 2; // net revenue (base currency)
+  MetricWithComparison new_aov = 3;
+  MetricWithComparison returning_orders = 4;
+  MetricWithComparison returning_revenue = 5; // net revenue (base currency)
+  MetricWithComparison returning_aov = 6;
+  double new_revenue_share_pct = 7; // new_revenue / (new+returning) × 100
+  repeated TimeSeriesPoint new_revenue_by_day = 8; // value=EUR revenue, count=orders
+  repeated TimeSeriesPoint returning_revenue_by_day = 9;
 }
 
 // MarginMetrics is the DB-trusted COGS / margin view (from product.cost_price), computed over
@@ -1832,6 +1928,7 @@ message GeographyMetric {
   int32 compare_count = 7;
   double share_pct = 8; // percentage of total revenue for this geography
   google.type.Decimal avg_order_value = 9; // AOV for this geography
+  double change_pct = 10; // analytics-v2 task 10: period-over-period revenue growth % (only with a compare period)
 }
 
 message RegionMetric {
@@ -1843,6 +1940,50 @@ message RegionMetric {
 message GeographySection {
   repeated GeographyMetric by_country = 1;
   repeated GeographySessionMetric sessions_by_country = 2;
+  repeated CountryEconomicsRow economics_by_country = 3; // analytics-v2 task 08: per-country profitability
+  repeated CountryLogisticsRow logistics_by_country = 4; // analytics-v2 task 09: fulfilment + returns
+  repeated CountryDemandRow demand_by_country = 5; // analytics-v2 task 09: conversion + demand mix
+}
+
+message CountryEconomicsRow {
+  string country = 1; // ISO-2, as stored in address.country
+  google.type.Decimal revenue = 2; // net revenue (base currency) — ties out with by_country.value
+  int32 orders = 3;
+  google.type.Decimal revenue_cost = 4; // COGS: Σ(cost snapshot × qty × refund-adjust) over costed items
+  google.type.Decimal gross_margin = 5; // costed revenue − COGS
+  double gross_margin_pct = 6; // gross_margin / costed revenue × 100
+  double cost_coverage_pct = 7; // % of this country's product revenue that has a cost set
+  google.type.Decimal shipping_cost = 8; // actual carrier cost → tariff fallback, incl. return leg
+  google.type.Decimal payment_fees = 9; // captured Stripe fee (customer_order.payment_fee)
+  google.type.Decimal contribution_margin = 10; // gross_margin − shipping − payment fees
+  google.type.Decimal profit_per_order = 11; // contribution_margin / orders
+  google.type.Decimal total_discount = 12; // product-sale + promo-code discount (base currency)
+  google.type.Decimal ltv_avg = 13; // avg lifetime customer value of customers who ordered here this period
+  int32 ltv_sample = 14; // number of customers behind ltv_avg
+}
+
+message CountryLogisticsRow {
+  string country = 1; // ISO-2, as stored in address.country
+  double avg_days_placed_to_delivered = 2;
+  double avg_days_placed_to_shipped = 3;
+  double on_time_rate_pct = 4; // delivered on/before the ETA date
+  int32 delivered_sample = 5; // orders with a usable delivered duration (durations denominator)
+  google.type.Decimal avg_shipping_cost = 6; // actual carrier cost → tariff fallback, incl. return leg
+  double refund_rate_pct = 7; // refunded amount as a share of this country's gross revenue
+  int32 refund_orders = 8; // orders with a partial or full refund
+}
+
+message CountryDemandRow {
+  string country = 1; // ISO-2, or "(unmatched)" for a GA4 country name with no ISO mapping
+  int32 sessions = 2; // GA4 sessions over the period (0 if outside the GA4 window)
+  int32 orders = 3; // DB net-revenue orders
+  double conversion_rate_pct = 4; // orders / sessions × 100 (0 when sessions = 0)
+  google.type.Decimal aov = 5; // average order value (base currency), for a self-contained tab
+  int32 new_customers = 6;
+  int32 returning_customers = 7;
+  double new_share_pct = 8; // new / (new + returning) × 100
+  repeated CategoryMetric top_categories = 9; // top 3 categories by revenue in this country
+  string caveat = 10; // directional-conversion / GA4-window caveat
 }
 
 message CurrencyMetric {
@@ -1874,6 +2015,7 @@ message CategoryMetric {
   google.type.Decimal value = 3;
   int32 count = 4;
   string category_display_name = 5; // Human-readable label (e.g., Hoodies & Sweatshirts)
+  double share_pct = 6; // analytics-v2 task 01: this category's value as % of total category revenue
 }
 
 message CrossSellPair {
