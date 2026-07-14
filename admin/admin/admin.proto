@@ -3917,6 +3917,15 @@ message ReceiveProductionRunRequest {
   // NF-06: the run is multi-colourway, so receive no longer takes a product_id — every line's
   // received_qty is booked into that line's own product. Each product must be linked to the run's
   // tech card, and at least one line must carry a received quantity.
+  //
+  // AUXILIARY runs (NF-07/B-3): when the run's tech card has purpose=auxiliary this same RPC
+  // receives the output into the MATERIAL warehouse instead of product stock. Lines must NOT carry
+  // a product_id (rejected with InvalidArgument — not ignored); Σ received_qty is booked into the
+  // card's output_material_id as one receipt_production movement whose unit cost is the run's
+  // actual per-unit base cost (manual cost articles + materials-from-stock, net of returns) — it
+  // moves that material's moving average, or books uncosted when the actuals are incomplete. A
+  // card without output_material_id fails with FailedPrecondition. update_cost_price is a no-op
+  // for auxiliary runs (cost_price_updated is always false — there is no product).
   bool update_cost_price = 3; // also set every received product's cost_price from the run's actual unit cost
   reserved 2; // was product_id (single-product receive; replaced by per-line products)
 }

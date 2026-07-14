@@ -137,6 +137,11 @@ message TechCardColorway {
   // garment part, in what colour, at what consumption. Per-colourway divergence lives here.
   repeated TechCardColorwayUsage usages = 16;
   reserved 15; // was `materials` (OUTPUT-ONLY); usages + bom_items resolve it now
+  // OUTPUT-ONLY stable row id (B-10): set on Get/List so a sample can be linked to a colourway
+  // (Sample.colorway_id). Ignored on write — a card save full-replaces colourways with fresh ids
+  // (the server re-points existing sample links by colourway identity, case-folded code+name), so
+  // re-read the card and use a fresh id right before linking a sample.
+  int32 id = 17;
 }
 
 // TechCardColorwayUsage is one material use inside a colourway: which catalog article
@@ -587,7 +592,10 @@ message TechCardPiece {
 
 message TechCardInsert {
   // identification (Sheet «Титул»)
-  string style_number = 1; // Артикул (required)
+  // Артикул. Required from the PROTO stage onward; OPTIONAL (empty) while stage == IDEA — an idea
+  // is by definition pre-article (NF-03/B-2). Moving a card out of IDEA without a real style
+  // number is rejected with InvalidArgument.
+  string style_number = 1;
   string name = 2; // Название изделия (required)
   string brand = 3;
   string season = 4;
