@@ -24,9 +24,9 @@ service FrontendService {
     option (google.api.http) = {get: "/api/frontend/hero"};
   }
 
-  // Get product brand and name
+  // GetProduct resolves a product by its base SKU (the /p/{pretty}-{sku} URL tail).
   rpc GetProduct(GetProductRequest) returns (GetProductResponse) {
-    option (google.api.http) = {get: "/api/frontend/product/{gender}/{brand}/{name}/{id}"};
+    option (google.api.http) = {get: "/api/frontend/product/{sku}"};
   }
 
   // Get paged products
@@ -114,9 +114,9 @@ service FrontendService {
     option (google.api.http) = {get: "/api/frontend/archive/paged"};
   }
 
-  // GetArchive retrieves an archive by its heading, tag and id.
+  // GetArchive retrieves an archive by its stable public code (the /timeline URL tail).
   rpc GetArchive(GetArchiveRequest) returns (GetArchiveResponse) {
-    option (google.api.http) = {get: "/api/frontend/archive/{heading}/{tag}/{id}"};
+    option (google.api.http) = {get: "/api/frontend/archive/{code}"};
   }
 
   // Submit a support ticket
@@ -225,10 +225,10 @@ message GetHeroResponse {
 }
 
 message GetProductRequest {
-  string gender = 1;
-  string brand = 2;
-  string name = 3;
-  int32 id = 4;
+  // Resolve by base SKU (the public product key). The frontend extracts it from the
+  // /p/{pretty}-{sku} URL tail. Fields 1-4 (gender/brand/name/id) are removed — the internal
+  // product.id is no longer a public key (SKU redesign PR3, breaking, no redirects).
+  string sku = 5;
 }
 
 message GetProductResponse {
@@ -373,9 +373,8 @@ message GetArchivesPagedResponse {
 }
 
 message GetArchiveRequest {
-  string heading = 1;
-  string tag = 2;
-  int32 id = 3;
+  // code is the archive's stable public identifier (the tail of /timeline/{pretty}-{code}).
+  string code = 1;
 }
 
 message GetArchiveResponse {
