@@ -25,12 +25,12 @@ service FrontendService {
   }
 
   // Get product brand and name
-  rpc GetProduct(GetProductRequest) returns (GetProductResponse) {
+  rpc GetColorway(GetColorwayRequest) returns (GetColorwayResponse) {
     option (google.api.http) = {get: "/api/frontend/product/{gender}/{brand}/{name}/{id}"};
   }
 
   // Get paged products
-  rpc GetProductsPaged(GetProductsPagedRequest) returns (GetProductsPagedResponse) {
+  rpc GetColorwaysPaged(GetColorwaysPagedRequest) returns (GetColorwaysPagedResponse) {
     option (google.api.http) = {get: "/api/frontend/products/paged"};
   }
 
@@ -224,18 +224,18 @@ message GetHeroResponse {
   common.Dictionary dictionary = 2;
 }
 
-message GetProductRequest {
+message GetColorwayRequest {
   string gender = 1;
   string brand = 2;
   string name = 3;
   int32 id = 4;
 }
 
-message GetProductResponse {
-  common.ProductFull product = 1;
+message GetColorwayResponse {
+  common.ColorwayFull product = 1;
 }
 
-message GetProductsPagedRequest {
+message GetColorwaysPagedRequest {
   int32 limit = 1;
   int32 offset = 2;
   repeated common.SortFactor sort_factors = 3;
@@ -243,8 +243,8 @@ message GetProductsPagedRequest {
   common.FilterConditions filter_conditions = 5;
 }
 
-message GetProductsPagedResponse {
-  repeated common.Product products = 1;
+message GetColorwaysPagedResponse {
+  repeated common.Colorway products = 1;
   int32 total = 2;
 }
 
