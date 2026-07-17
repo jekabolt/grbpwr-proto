@@ -95,9 +95,33 @@ service AdminService {
     option (google.api.http) = {get: "/api/admin/product/{id}"};
   }
 
-  // Deletes a product by its ID.
-  rpc DeleteColorwayByID(DeleteColorwayByIDRequest) returns (DeleteColorwayByIDResponse) {
-    option (google.api.http) = {delete: "/api/admin/product/{id}"};
+  // ArchiveColorwayByID retires a colourway (archive-not-delete, R6/R9): ACTIVE|HIDDEN -> ARCHIVED
+  // (terminal). Was DeleteColorwayByID.
+  rpc ArchiveColorwayByID(ArchiveColorwayByIDRequest) returns (ArchiveColorwayByIDResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/colorways/{colorway_id}/archive"
+      body: "*"
+    };
+  }
+
+  // PublishColorway transitions a DRAFT colourway to ACTIVE (R6), enforcing the sellable
+  // preconditions (built base SKU, ≥1 valid-SKU variant, complete sku_season+model_no, dictionary
+  // colour, country, price, default translation).
+  rpc PublishColorway(PublishColorwayRequest) returns (PublishColorwayResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/colorways/{colorway_id}/publish"
+      body: "*"
+    };
+  }
+
+  // TransitionColorwayStatus applies a non-publish lifecycle edge (R6): ACTIVE<->HIDDEN and
+  // ACTIVE|HIDDEN->ARCHIVED, validated through the server state machine. Publish has its own RPC
+  // because it carries preconditions.
+  rpc TransitionColorwayStatus(TransitionColorwayStatusRequest) returns (TransitionColorwayStatusResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/colorways/{colorway_id}/status"
+      body: "*"
+    };
   }
 
   // Updates the stock for a specific product size.
@@ -1359,11 +1383,35 @@ message SyncColorwayCostFromStyleResponse {
   int32 tech_card_id = 3;
 }
 
-message DeleteColorwayByIDRequest {
-  int32 id = 1;
+// Lifecycle transition requests (R6). expected_version echoes tech_card.lock_version for future
+// optimistic-lock wiring; concurrency today is enforced by the server's lifecycle_status guard (a
+// concurrent transition is rejected, never silently lost).
+message ArchiveColorwayByIDRequest {
+  int32 colorway_id = 1;
+  uint64 expected_version = 2;
+  reserved "id"; // was DeleteColorwayByIDRequest.id
 }
 
-message DeleteColorwayByIDResponse {}
+message ArchiveColorwayByIDResponse {}
+
+message PublishColorwayRequest {
+  int32 colorway_id = 1;
+  uint64 expected_version = 2;
+}
+
+message PublishColorwayResponse {
+  common.Colorway colorway = 1; // ACTIVE, with the minted base SKU
+}
+
+message TransitionColorwayStatusRequest {
+  int32 colorway_id = 1;
+  uint64 expected_version = 2;
+  common.ColorwayLifecycleStatus target = 3; // HIDDEN | ACTIVE (unhide) | ARCHIVED; DRAFT->ACTIVE uses PublishColorway
+}
+
+message TransitionColorwayStatusResponse {
+  common.Colorway colorway = 1;
+}
 
 message UpdateVariantStockRequest {
   common.StockAdjustmentMode mode = 1; // Required: "set" for absolute value, "adjust" for delta
@@ -1377,10 +1425,13 @@ message UpdateVariantStockRequest {
 
 message UpdateVariantStockResponse {}
 
-// ColorwayCustoms is a product's international-shipping customs data. country_of_origin is ISO-2.
+// ColorwayCustoms is a product's international-shipping customs data. hs_code and
+// customs_description are the customs-only fields set by SetColorwayCustoms. country_of_origin is the
+// existing core product field (free-text manufacture country) returned read-only for display and
+// reused as the Sendcloud origin_country — SetColorwayCustoms ignores it (edit it on the product form).
 message ColorwayCustoms {
   string hs_code = 1;
-  string country_of_origin = 2; // ISO 3166-1 alpha-2 (Sendcloud origin_country)
+  string country_of_origin = 2; // read-only; core product field, resolved to ISO-2 at label time
   string customs_description = 3;
 }
 
@@ -1659,8 +1710,9 @@ message GetMetricsResponse {
   ProfitabilitySection profitability = 55; // analytics-v2 task 07
 }
 
-// --- analytics-v2 messages (mirrored from backend admin.proto; keep field numbers identical) ---
-
+// RevenueForecast projects net revenue for the calendar month containing the period end. It blends a
+// day-of-week run-rate (trailing 8 weeks) with a seasonal ratio-to-date from last year when that data
+// exists. DB-only (no GA4). Directional at this data scale — read the low/high band, not the point.
 message RevenueForecast {
   google.protobuf.Timestamp month = 1; // first day of the forecast month
   google.type.Decimal mtd_actual = 2; // net revenue so far this month
@@ -1675,6 +1727,10 @@ message RevenueForecast {
   string caveat = 11;
 }
 
+// DeliverySection reports fulfilment speed for orders PLACED in the period (a placed-cohort, so the
+// average is not dragged by tails of earlier periods). Durations come from order_status_history
+// timestamps; on-time compares delivered_at against shipment.estimated_arrival_date. Delivered is
+// operator-flipped, so gate the delivered-based figures on delivered_coverage_pct / delivered_sample.
 message DeliverySection {
   double avg_days_placed_to_shipped = 1;
   double avg_days_shipped_to_delivered = 2;
@@ -1690,6 +1746,10 @@ message DeliverySection {
   string caveat = 12;
 }
 
+// OrderValueBandRow is one fixed order-value bucket: how many orders and how much net revenue
+// fall in [from, to) EUR. Bands are fixed (not quantile) so they are comparable across periods.
+// Order value is net of VAT and after discounts/refunds — consistent with AOV, so band edges will
+// not line up with on-site sticker prices.
 message OrderValueBandRow {
   string label = 1; // e.g. "€0–50", "€500+"
   google.type.Decimal from = 2; // inclusive lower edge (base currency)
@@ -1701,7 +1761,14 @@ message OrderValueBandRow {
   google.type.Decimal avg_order_value = 8;
 }
 
+// ProfitabilitySection is the self-contained "Profitability" tab (analytics-v2 task 07): the margin
+// figures and their erosion (discounts), the acquisition-economics block (CPO / blended CAC / LTV /
+// LTV·CAC), fulfilment cost per order, returns, and the operating-result roll-up — assembled from the
+// SAME builders the dashboard uses so the shared figures tie out. CPO/CAC/LTV·CAC use manually-entered
+// media spend (channel_spend): when none is entered has_spend=false and they are 0 (N/A, not "free").
+// Cost/margin fields are stripped for accounts without costing:read; ltv (revenue-side) is kept.
 message ProfitabilitySection {
+  // --- margin and its erosion (assembly of existing figures) ---
   MetricWithComparison gross_margin = 1; // costed revenue − COGS
   MetricWithComparison gross_margin_pct = 2; // gross_margin / costed revenue × 100
   double cost_coverage_pct = 3; // % of product revenue that has a cost set (trust gate for the margins)
@@ -1710,12 +1777,14 @@ message ProfitabilitySection {
   MetricWithComparison promo_code_discount = 6;
   MetricWithComparison discount_rate_pct = 7; // total discount / gross revenue × 100 (task 01)
   MetricWithComparison contribution_margin = 8; // gross_margin − shipping − payment fees
+  // --- acquisition economics (new) ---
   MetricWithComparison cpo = 9; // marketing_spend / orders — 0 when has_spend=false
   MetricWithComparison blended_cac = 10; // marketing_spend / new_customers — meaningful on monthly+ ranges
   bool has_spend = 11; // false → cpo / blended_cac / ltv_cac_ratio are N/A (no media spend entered)
   google.type.Decimal ltv = 12; // historical CLV mean (realized revenue per customer this period), not predictive
   double ltv_cac_ratio = 13; // ltv / blended_cac — 0 = N/A
   MetricWithComparison fulfilment_cost_per_order = 14; // (shipping + payment fees) / orders
+  // --- returns and the bottom line ---
   MetricWithComparison refund_rate = 15; // refunded / gross revenue × 100
   MetricWithComparison total_refunded = 16;
   google.type.Decimal opex_total = 17; // day-pro-rated fixed costs over the period
@@ -1885,6 +1954,22 @@ message CommerceCoreMetrics {
   // resolved per order from the destination country (0 for export / pre-feature orders).
   MetricWithComparison revenue_incl_vat = 55;
   MetricWithComparison vat_amount = 56;
+  // unique_customers: distinct buyer emails with a net-revenue order in the period (the
+  // "покупатели" KPI). Differs from new_customers (first-ever order in the period) and from
+  // clv_distribution.sample_size (distinct emails with non-zero apportioned revenue).
+  MetricWithComparison unique_customers = 57;
+  // peak_day: the single calendar day with the highest net revenue in the period (KPI card).
+  // Computed from a daily net-revenue rollup independent of trend_granularity; unset when the
+  // period has no revenue.
+  PeakDay peak_day = 58;
+  // discount_rate_pct: total_discount / gross_revenue × 100 — the share of list revenue given
+  // away as product-sale + promo discounts (a margin-erosion factor). lower_is_better. Numerator
+  // and denominator differ slightly in refunded-order treatment; see caveat.
+  MetricWithComparison discount_rate_pct = 59;
+  // new_vs_returning: revenue / orders / AOV split by whether the buyer's first-ever order (any
+  // status) falls in the period. Complements the existing new/returning_customers_by_day COUNT
+  // series with money. new+returning revenue reconciles with headline revenue.
+  NewVsReturningSplit new_vs_returning = 60;
   MetricWithComparison new_subscribers = 13;
   MetricWithComparison new_customers = 14;
   MetricWithComparison repeat_customers_rate = 15;
@@ -1931,18 +2016,18 @@ message CommerceCoreMetrics {
   repeated TimeSeriesPoint returning_customers_by_day_compare = 52;
   repeated TimeSeriesPoint shipped_by_day_compare = 53;
   repeated TimeSeriesPoint delivered_by_day_compare = 54;
-  MetricWithComparison unique_customers = 57; // analytics-v2 task 01: distinct buyer emails (net-revenue)
-  PeakDay peak_day = 58; // analytics-v2 task 01: highest-net-revenue calendar day
-  MetricWithComparison discount_rate_pct = 59; // analytics-v2 task 01: total discount / gross revenue × 100
-  NewVsReturningSplit new_vs_returning = 60; // analytics-v2 task 02
 }
 
+// PeakDay is the highest-net-revenue calendar day in the reporting period.
 message PeakDay {
   google.protobuf.Timestamp date = 1;
   google.type.Decimal revenue = 2; // net revenue (base currency) on that day
   int32 orders = 3; // net-revenue orders placed that day
 }
 
+// NewVsReturningSplit breaks the period's net revenue, orders and AOV into new vs returning
+// customers. "New" = the buyer's first-ever order (any status) falls in the period; a customer's
+// second order in the same period is still counted new (matching the new_customers_by_day series).
 message NewVsReturningSplit {
   MetricWithComparison new_orders = 1;
   MetricWithComparison new_revenue = 2; // net revenue (base currency)
@@ -2047,7 +2132,11 @@ message GeographyMetric {
   int32 compare_count = 7;
   double share_pct = 8; // percentage of total revenue for this geography
   google.type.Decimal avg_order_value = 9; // AOV for this geography
-  double change_pct = 10; // analytics-v2 task 10: period-over-period revenue growth % (only with a compare period)
+  // analytics-v2 task 10 (scaling): period-over-period revenue growth, (value − compare)/compare × 100,
+  // computed server-side so the frontend needn't divide decimal strings. Only set with a compare
+  // period; 0 when the country had no compare-period revenue — read compare_count == 0 as "new country"
+  // (an infinite growth rate) rather than as flat.
+  double change_pct = 10;
 }
 
 message RegionMetric {
@@ -2064,6 +2153,48 @@ message GeographySection {
   repeated CountryDemandRow demand_by_country = 5; // analytics-v2 task 09: conversion + demand mix
 }
 
+// CountryLogisticsRow is per-country fulfilment and returns (analytics-v2 task 09). Durations come
+// from order_status_history for orders PLACED in the period; delivered figures are operator-flipped so
+// gate them on delivered_sample (a small country with one missing flip reads as 0% coverage). Refund
+// rate on a handful of orders swings 0↔100, so refund_orders is surfaced for the UI to gate. No
+// confidential cost fields — avg_shipping_cost is logistics (not COGS) and stays visible.
+message CountryLogisticsRow {
+  string country = 1; // ISO-2, as stored in address.country
+  double avg_days_placed_to_delivered = 2;
+  double avg_days_placed_to_shipped = 3;
+  double on_time_rate_pct = 4; // delivered on/before the ETA date
+  int32 delivered_sample = 5; // orders with a usable delivered duration (durations denominator)
+  google.type.Decimal avg_shipping_cost = 6; // actual carrier cost → tariff fallback, incl. return leg
+  double refund_rate_pct = 7; // refunded amount as a share of this country's gross revenue
+  int32 refund_orders = 8; // orders with a partial or full refund
+}
+
+// CountryDemandRow is per-country demand mix (analytics-v2 task 09): conversion, new-vs-returning and
+// the top categories. Conversion is DIRECTIONAL only — sessions are geo-IP (a tourist buying from a
+// hotel), and consent/ad-block undercounts them, so the rate is systematically OVER-stated; compare
+// countries to each other, never to external benchmarks. GA4's cache is 90 days, so sessions (and thus
+// conversion) are 0 when the window exceeds it — the caveat says which. Orders are DB net-revenue,
+// attributed by shipping-address country; sessions by GA4 country name mapped to ISO-2 (an unmapped GA4
+// country lands in a "(unmatched)" row so it is visible, not dropped).
+message CountryDemandRow {
+  string country = 1; // ISO-2, or "(unmatched)" for a GA4 country name with no ISO mapping
+  int32 sessions = 2; // GA4 sessions over the period (0 if outside the GA4 window)
+  int32 orders = 3; // DB net-revenue orders
+  double conversion_rate_pct = 4; // orders / sessions × 100 (0 when sessions = 0)
+  google.type.Decimal aov = 5; // average order value (base currency), for a self-contained tab
+  int32 new_customers = 6;
+  int32 returning_customers = 7;
+  double new_share_pct = 8; // new / (new + returning) × 100
+  repeated CategoryMetric top_categories = 9; // top 3 categories by revenue in this country
+  string caveat = 10; // directional-conversion / GA4-window caveat
+}
+
+// CountryEconomicsRow is per-country profitability (analytics-v2 task 08): margin and its inputs,
+// contribution, profit per order, and average customer LTV. Revenue/orders reconcile with
+// by_country (same shipping-address attribution). Margin is over items that HAVE a cost snapshot, so
+// gate on cost_coverage_pct and orders — a 2-order country can show 80% margin. gross_margin,
+// revenue_cost, contribution_margin, payment_fees and profit_per_order are confidential cost data
+// (stripped without costing:read); revenue, orders, discount and ltv_avg (revenue-side) stay visible.
 message CountryEconomicsRow {
   string country = 1; // ISO-2, as stored in address.country
   google.type.Decimal revenue = 2; // net revenue (base currency) — ties out with by_country.value
@@ -2079,30 +2210,6 @@ message CountryEconomicsRow {
   google.type.Decimal total_discount = 12; // product-sale + promo-code discount (base currency)
   google.type.Decimal ltv_avg = 13; // avg lifetime customer value of customers who ordered here this period
   int32 ltv_sample = 14; // number of customers behind ltv_avg
-}
-
-message CountryLogisticsRow {
-  string country = 1; // ISO-2, as stored in address.country
-  double avg_days_placed_to_delivered = 2;
-  double avg_days_placed_to_shipped = 3;
-  double on_time_rate_pct = 4; // delivered on/before the ETA date
-  int32 delivered_sample = 5; // orders with a usable delivered duration (durations denominator)
-  google.type.Decimal avg_shipping_cost = 6; // actual carrier cost → tariff fallback, incl. return leg
-  double refund_rate_pct = 7; // refunded amount as a share of this country's gross revenue
-  int32 refund_orders = 8; // orders with a partial or full refund
-}
-
-message CountryDemandRow {
-  string country = 1; // ISO-2, or "(unmatched)" for a GA4 country name with no ISO mapping
-  int32 sessions = 2; // GA4 sessions over the period (0 if outside the GA4 window)
-  int32 orders = 3; // DB net-revenue orders
-  double conversion_rate_pct = 4; // orders / sessions × 100 (0 when sessions = 0)
-  google.type.Decimal aov = 5; // average order value (base currency), for a self-contained tab
-  int32 new_customers = 6;
-  int32 returning_customers = 7;
-  double new_share_pct = 8; // new / (new + returning) × 100
-  repeated CategoryMetric top_categories = 9; // top 3 categories by revenue in this country
-  string caveat = 10; // directional-conversion / GA4-window caveat
 }
 
 message CurrencyMetric {
@@ -2134,7 +2241,10 @@ message CategoryMetric {
   google.type.Decimal value = 3;
   int32 count = 4;
   string category_display_name = 5; // Human-readable label (e.g., Hoodies & Sweatshirts)
-  double share_pct = 6; // analytics-v2 task 01: this category's value as % of total category revenue
+  // share_pct: this category's value as a percentage of total category revenue in the period.
+  // Categories are an item-level split (shipping is not attributed), so shares sum to 100 within
+  // the breakdown, not against headline revenue.
+  double share_pct = 6;
 }
 
 message CrossSellPair {
@@ -4056,11 +4166,13 @@ message ListTechCardsRequest {
   common.TechCardStage stage = 4; // UNKNOWN = no filter
   common.GenderEnum gender = 5; // UNKNOWN = no filter
   string brand = 6; // optional case-insensitive substring
-  string season = 7; // optional case-insensitive substring
+  reserved 7;
+  reserved "season";
   string name = 8; // optional case-insensitive substring on name or style_number
   int32 product_id = 9; // optional: only cards linked to this product (0 = no filter)
   string purpose = 10; // optional exact match: "sellable" | "auxiliary" ("" = no filter). A
-                       // product-linking picker passes "sellable" to hide auxiliary/packaging cards.
+  // product-linking picker passes "sellable" to hide auxiliary/packaging cards.
+  common.SkuSeason sku_season = 11; // optional exact normalized pair; no free-text matching
 }
 
 message ListTechCardsResponse {
