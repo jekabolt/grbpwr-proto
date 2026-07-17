@@ -218,6 +218,12 @@ message AdminColorwayRef {
   string base_sku = 2;
   string color_code = 3;
   ColorwayLifecycleStatus status = 4;
+  // usages is this colourway's material recipe (H1 fix, WS3/S2-S3): the constructor view of a
+  // style now shows each colourway's recipe alongside its identity, instead of the recipe being
+  // write-only (UpdateColorwayRecipe persisted usages that no read path ever surfaced). Money
+  // fields (line_total/size_run_total) are stripped for an account without costing:read, same as
+  // the rest of the tech-card read (stripTechCardCosting).
+  repeated TechCardColorwayUsage usages = 5;
 }
 
 // TechCardColorway was the development-colourway child of a style. Removed in the R1 merge
@@ -945,6 +951,10 @@ message TechCard {
   // OUTPUT-ONLY derived colourways of this style (R1/§3.3): a style's colourways are its products.
   // Not writable through the style — created/relinked via the Colorway RPCs.
   repeated AdminColorwayRef colorways = 9;
+  // composition_entries is the style's structured fibre composition (S17/M1 fix), resolved from
+  // style_composition; empty when the style has no structural composition data yet. Read-only,
+  // admin/constructor view — the storefront's equivalent is StorefrontColorwayDisplay.composition_entries.
+  repeated CompositionEntry composition_entries = 14;
   reserved 5; // was resolved_media (single combined list; now split)
 }
 
