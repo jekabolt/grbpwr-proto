@@ -350,6 +350,10 @@ message SubscribeNewsletterRequest {
   bool subscribe_newsletter = 4;
   bool subscribe_new_arrivals = 5;
   bool subscribe_events = 6;
+  // language is the active site locale at signup (ISO-639-1). Seeds the account's language
+  // so the welcome (and future account-based emails) go out in the language the user
+  // subscribed in.
+  string language = 7;
 }
 
 message SubscribeNewsletterResponse {}
@@ -489,6 +493,10 @@ message StorefrontAccount {
   repeated StorefrontSavedAddress addresses = 11;
   string default_country = 12;
   string default_language = 13;
+  // email_language is the explicit, sticky preference for transactional email language
+  // (ISO-639-1). Empty = not chosen (mailer falls back to purchase locale then
+  // default_language then en). Distinct from default_language (auto-derived from site locale).
+  string email_language = 14;
 }
 
 message GetAccountRequest {}
@@ -508,6 +516,7 @@ message UpdateAccountRequest {
   optional bool subscribe_events = 8;
   optional string default_country = 9;
   optional string default_language = 10;
+  optional string email_language = 11;
 }
 
 message UpdateAccountResponse {
