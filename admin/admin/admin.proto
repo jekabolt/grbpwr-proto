@@ -6366,6 +6366,13 @@ message PostProductionRunReceiptRequest {
   // flips it to RECEIVED. The flag is part of the idempotency request hash — the same key with a
   // flipped flag is a different intent and is rejected, never replayed.
   bool partial = 7;
+  // Storefront side effect (stock-write contract): when true, customers waitlisted on a variant
+  // this receipt takes 0→in-stock get the back-in-stock email — the same notification the manual
+  // stock update fires. Operator-chosen per receipt (modal checkbox); the default false sends
+  // nothing. ISR page revalidation fires regardless of this flag. Like every request field it is
+  // part of the idempotency hash; notifications themselves fire only on the ORIGINAL execution,
+  // never on a replay.
+  bool notify_waitlist = 8;
 }
 
 message PostProductionRunReceiptResponse {
