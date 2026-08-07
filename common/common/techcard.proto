@@ -965,7 +965,13 @@ message TechCardSizeQuantity {
 // library. The file type is carried by the url's extension (.pdf / .dxf), which the
 // server derives from the uploaded bytes — there is no separate content-type field.
 message TechCardSizePattern {
-  int32 size_id = 1; // FK size(id); must be one of TechCardInsert.size_ids
+  // size_id is the size the sheet is FILED UNDER, and 0 means it is filed under none — the sheet is
+  // graded and its sizes live in the DXF's block names, which only the client reads. A non-zero
+  // value must be one of TechCardInsert.size_ids; 0 is accepted whatever the size range is,
+  // INCLUDING an empty one, which is what lets a pattern reach a card before its grade is decided.
+  // Nothing on the server reads this field to decide anything: coverage («есть ли выкройка на этот
+  // размер») is answered by the pattern size index, not by this column.
+  int32 size_id = 1;
   string url = 2; // CDN url of the uploaded PDF/DXF (required)
   string filename = 3; // original filename, for display / download
   int64 size_bytes = 4; // file size in bytes (0 = unknown)
