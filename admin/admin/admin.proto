@@ -4663,6 +4663,21 @@ message WorkshopSettings {
   // true is switched on ONLY after кампания Д3 (re-measuring the norms). The order is forced and
   // physically irreversible: directions (Д1) → re-measure after Ф3 ships (Д3) → blocking (Д4).
   optional bool run_readiness_blocking = 5;
+
+  // ПРЕДЕЛ ВЫСОТЫ СТОПКИ, in CENTIMETRES — четвёртый жилец дома настроек цеха (Ф4.8), and the house
+  // rule holds again after the one tenant that broke it: ABSENT = не настроено, and a consumer must
+  // then say NOTHING about the height rather than compare against zero.
+  //
+  // САНТИМЕТРЫ, А НЕ ЧИСЛО СЛОЁВ — the whole reason this is a shop setting and not a per-marker one:
+  // 30 слоёв шифона это 2 см, 30 слоёв драпа — 30 см. What actually limits the лежание is the blade,
+  // and a blade cuts a HEIGHT. Accepted band (0, 100]; the longest knives reach about 30 cm, so past
+  // a hundred it is a unit mistake rather than a workshop.
+  //
+  // ONE limit per shop (решение Р5), not one per fabric: пер-ножевые пределы are a refinement with
+  // no data behind it today, and a column nothing can fill is not created. The article-side half of
+  // the check is common.Material.fabric_thickness_mm; either one absent ⇒ UNKNOWN, and the screen
+  // says which of the two is missing rather than printing a height nobody can trust.
+  google.type.Decimal max_stack_height_cm = 6;
 }
 
 message GetWorkshopSettingsRequest {}
@@ -4710,6 +4725,12 @@ message UpdateWorkshopSettingsRequest {
   // "clear it back to unset" for a bool, and none is needed: false and unset behave identically
   // (report-only), which is the whole point of the column's NULL having a defined behaviour.
   optional bool run_readiness_blocking = 3;
+
+  // Ф4.8 — предел высоты стопки, CENTIMETRES, band (0, 100]. Zero is REJECTED rather than stored:
+  // a limit of 0 cm would fail every настил ever laid, so «у нас нет предела» is expressed by
+  // clearing the setting (send the empty message), which withholds the verdict instead of failing
+  // it. Same floor argument as the table length, opposite to the seam allowance's legal zero.
+  google.type.Decimal max_stack_height_cm = 4;
 }
 
 message UpdateWorkshopSettingsResponse {
