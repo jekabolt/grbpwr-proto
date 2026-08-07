@@ -1865,6 +1865,11 @@ message TechCardMarkerSummary {
   // answer everywhere instead of a different one per screen. Readers disagreeing would be worse
   // than two norms; readers agreeing SILENTLY would be worse than saying so.
   string norm_conflict = 35;
+
+  // Прогон, которому принадлежит РАСКРОЙНЫЙ маркер (Ф4.2, migration 0282); 0 = карточный (норма и
+  // все сегодняшние). Только на выход. Карточные списки такие маркеры не показывают вовсе, поэтому
+  // увидеть ненулевое значение можно ровно в одном месте — ListProductionRunLays.run_markers.
+  int32 production_run_id = 36;
 }
 
 // TechCardMarkerPieceSetStatus compares a раскладка's stored fingerprint of the card's cut-piece set
@@ -2038,6 +2043,15 @@ message TechCardMarkerInsert {
   // «flipping was forbidden». Inferring would OVERSTATE strictness and let the «не хуже» rule pass a
   // marker that was in fact free to flip.
   optional bool allow_flip = 21;
+
+  // Сделать маркер РАСКРОЙНЫМ для этого прогона (Ф4.2, migration 0282). 0 = карточный.
+  // НЕИЗМЕНЯЕМО после создания: перевод карточного маркера в прогонный (и обратно) переносит право
+  // на его жизнь — раскройный умирает вместе с прогоном по FK CASCADE — а вместе с этим правом
+  // меняется смысл ссылок из секций настила. Кому надо — копирует.
+  //
+  // Раскройный маркер не может быть нормой: CHECK chk_tcm_run_not_norm держит это инвариантом, а не
+  // соглашением, поэтому смерть прогона физически не может унести норму карточки.
+  int32 production_run_id = 22;
 }
 
 // TechCardMarkerLayout is the self-contained geometry of a marker, stored as an opaque proto-JSON
