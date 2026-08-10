@@ -6611,6 +6611,12 @@ message GetBomWastageSuggestionResponse {
   string detail = 6;
   // Разбор ПО НАСТИЛАМ, вошедшие и невошедшие, от свежего замера к старому.
   repeated common.BomWastageLayDrift drifts = 7;
+  // ОКНО ОТБОРА: сколько настилов-кандидатов РАССМОТРЕНО (свежие N — скан истории артикула
+  // ограничен) и сколько измеренных кандидатов есть ВСЕГО. considered < total означает, что
+  // медиана стоит на свежем окне, — и это видно, а не подразумевается: «медиана по N» без
+  // названного окна непроверяема.
+  int32 considered_lay_count = 8;
+  int32 total_measured_lay_count = 9;
 }
 
 // RepriceTechCardBom (production-costing Phase 3, plan 11).
