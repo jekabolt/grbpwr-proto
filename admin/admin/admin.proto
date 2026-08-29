@@ -3576,7 +3576,7 @@ message MediaUsage {
 // thumbnail and a gallery frame yields two refs with the same kind and entity_id).
 message MediaUsageRef {
   // product | archive | model | material | task | tech_card | fitting | sample |
-  // design_picture | design_sheet_version.
+  // design_picture | design_sheet_version | design_edit_layer.
   // The last two are the DESIGN band: a picture holds its media, and a MINTED SHEET VERSION holds
   // it with RESTRICT — that is why the library must name it, or somebody deletes the bytes a
   // printed Rev.N depends on.
