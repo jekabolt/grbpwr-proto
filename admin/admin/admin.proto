@@ -2627,6 +2627,23 @@ service AdminService {
     };
   }
 
+  // SetDesignPictureSelected marks a picture as CHOSEN (owner requirement W-12: «мы так же можем
+  // маркать 3д рендеры как выбранные»). It is a verb of its own and deliberately NOT a flag on
+  // HideDesignPicture: hidden says "do not show me this", selected says "this is the one" — the
+  // two are independent (a chosen picture can later be hidden), and folding them would make one
+  // gesture silently undo the other.
+  //
+  // Nothing is exclusive: the owner speaks in the plural, so many pictures of a kind may be chosen.
+  // ARTIFACTS reads the mark to decide what it offers for markup, which is why the field existed
+  // on the wire before this verb did — and why, until it landed, the mark was readable everywhere
+  // and settable nowhere.
+  rpc SetDesignPictureSelected(SetDesignPictureSelectedRequest) returns (SetDesignPictureSelectedResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/design/picture/{picture_id}/selected"
+      body: "*"
+    };
+  }
+
   // RegisterDesignUpload files ONE GESTURE as one batch plus its pictures; the bytes themselves
   // went up through UploadContentImage first. Optionally the same call puts the FIRST picture into
   // a bench slot, under the SAME compare-and-set as an ordinary placement — otherwise a drop onto
@@ -11760,6 +11777,15 @@ message HideDesignPictureRequest {
 }
 
 message HideDesignPictureResponse {
+  common.DesignPicture picture = 1;
+}
+
+message SetDesignPictureSelectedRequest {
+  int32 picture_id = 1;
+  bool selected = 2; // false un-marks
+}
+
+message SetDesignPictureSelectedResponse {
   common.DesignPicture picture = 1;
 }
 
