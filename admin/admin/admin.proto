@@ -2810,6 +2810,51 @@ service AdminService {
     };
   }
 
+  // SaveDesignVectorToLibrary files the vector's SVG into the FILES LIBRARY (owner requirement
+  // R-19: «экспорт и сохранение в библиотеку, чтобы при повторном заходе вектор уже был»; the
+  // owner named the files library). The bytes land in the PRIVATE library bucket as an ordinary
+  // library file labelled «Vectors», named after the card, and linked to the card so
+  // ListDesignVectorLibraryFiles can answer «what vectors does THIS card have».
+  //
+  // A HUMAN VERB, NOT A RUN COMPLETION. Machine vectorisation is a REDRAW (a cuff can come back a
+  // different cuff — see internal/recraft), and its result must be accepted by a person; auto-
+  // filing an unaccepted redraw would litter the shared library. The client calls this when the
+  // person saves/exports the vector.
+  //
+  // A REPEAT DOES NOT FILE A SECOND FILE: a retry is caught by client_request_id, the same bytes
+  // under a fresh id are caught by (card, sha256) — both answer the EXISTING file with
+  // deduplicated=true. The same id naming a different card or different bytes is InvalidArgument.
+  //
+  // IT SPENDS NOTHING, so it does not pass the generation gate — same line ImportDesignVector
+  // draws.
+  //
+  // NotFound: the card does not exist, or layer_id belongs to another card.
+  // InvalidArgument: missing client_request_id, empty svg, svg_too_large (> 2 MiB), invalid_svg,
+  // unknown layer_id, a reused client_request_id naming different content.
+  //
+  // invalid_svg IS A RIGHTS BOUNDARY, and it has a named price. The verb stands under
+  // tech_cards:write, not files:write, so the shape of the bytes is what keeps it from being a
+  // back door into the shared library: not-XML, rasters, DOCTYPE ENTITY declarations (XXE/bombs)
+  // and active content (script and kin, foreignObject, on* attributes) are refused. The price:
+  // an old Illustrator export carrying benign DTD entities, or an SVG wrapping text in
+  // foreignObject, will not save through THIS door — file it through the library upload instead.
+  rpc SaveDesignVectorToLibrary(SaveDesignVectorToLibraryRequest) returns (SaveDesignVectorToLibraryResponse) {
+    option (google.api.http) = {
+      post: "/api/admin/tech-card/{tech_card_id}/design/vector/library"
+      body: "*"
+    };
+  }
+
+  // ListDesignVectorLibraryFiles returns the vectors saved into the files library for this card,
+  // newest first — the «при повторном заходе вектор уже был» read. Files hidden from the caller
+  // by the library's visibility predicate drop out silently; an unknown card returns an empty
+  // list. SVG is not inline-safe, so each file carries download_url only (the library's own XSS
+  // rule); the operational vector for re-entry stays the band's layer/media — this list is the
+  // library-side truth, not a substitute for GetDesignBand.
+  rpc ListDesignVectorLibraryFiles(ListDesignVectorLibraryFilesRequest) returns (ListDesignVectorLibraryFilesResponse) {
+    option (google.api.http) = {get: "/api/admin/tech-card/{tech_card_id}/design/vector/library"};
+  }
+
   // DraftDesignIdea is a TEXT run through the same money and idempotency machine as every picture
   // run — a paid call with no row in the register would be a hole in the ledger. It runs INLINE:
   // the response already carries a finished DesignRun with status=done and output_text set.
@@ -11999,6 +12044,47 @@ message ImportDesignVectorResponse {
   // The layer as stored: origin and source_media_id set, rev = 1, strokes echoed. Its rev is what
   // the next SaveDesignEditLayer must compare-and-set against.
   common.DesignEditLayer layer = 1;
+}
+
+message SaveDesignVectorToLibraryRequest {
+  int32 tech_card_id = 1;
+  // Idempotency: a retry after a lost response must not file the same SVG twice. Required.
+  string client_request_id = 2;
+  // The SVG bytes as exported by the editor, at most 2 MiB. The server derives the object key,
+  // sha256 and size itself while streaming into the private bucket — none of them are trusted
+  // from the client. The FILE NAME is server-built from the card's name: one naming rule for
+  // every saved vector, so the library search finds them by the card.
+  bytes svg = 3;
+  // The design_edit_layer this export came from; 0 = not tied to a layer. Provenance, not
+  // ownership: deleting the layer later keeps the library file and clears the reference.
+  int32 layer_id = 4;
+}
+
+message SaveDesignVectorToLibraryResponse {
+  // The library file, with topics and freshly minted urls. SVG is not inline-safe, so url is
+  // empty and download_url is the way to the bytes (the library's own XSS rule).
+  LibraryFile file = 1;
+  // TRUE when an EXISTING file answered — a retry, or the same bytes saved again. The bytes this
+  // call uploaded were discarded; no second file was created.
+  bool deduplicated = 2;
+}
+
+message ListDesignVectorLibraryFilesRequest {
+  int32 tech_card_id = 1;
+}
+
+// DesignVectorLibraryFile is one saved vector: the library file plus the provenance of the save.
+message DesignVectorLibraryFile {
+  LibraryFile file = 1;
+  // 0 = saved without naming a layer, or the layer was deleted after (indistinguishable on
+  // purpose — the layer is gone either way).
+  int32 layer_id = 2;
+  string saved_by = 3;
+  google.protobuf.Timestamp saved_at = 4;
+}
+
+message ListDesignVectorLibraryFilesResponse {
+  repeated DesignVectorLibraryFile files = 1; // newest first
 }
 
 message SetDesignReferenceRoleRequest {
