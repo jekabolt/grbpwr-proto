@@ -11828,6 +11828,37 @@ message GetDesignBandResponse {
   // marked on THIS drawing» — and nesting would force the client to walk every asset to draw one
   // picture.
   repeated common.DesignAssetPlacement asset_placements = 19;
+  // THE CARD'S GENERATIVE OUTPUTS, WHOLE-CARD — every render, 3D frame, pattern tile and recolour
+  // this card holds, NOT just the ones whose run happens to sit on the page above.
+  //
+  // WHY IT EXISTS. `runs` is one page of the feed (12 rows), and the screen's «RENDERS OF THIS
+  // CARD» section was reading exactly that page. Every run of any kind — a flat re-trace, a vector
+  // redraw, a 3D try — pushes an older run off the window, so renders left the section one at a
+  // time and the crops split off them left with their parent run. The section's title claims the
+  // CARD; the answer had the scope of a page.
+  //
+  // WHY «ALL OF THEM» IS A BOUNDED ANSWER HERE AND NOT FOR FLATS. These kinds are MONEY-BOUND:
+  // every one of these pictures was paid for. Flats grow with every trace and every edit, cost
+  // nothing, and stay page-bound by design. The ceiling is 200 and `outputs_total` states the true
+  // count beside it, so a card that ever reaches it says so instead of silently truncating.
+  //
+  // HIDDEN PICTURES ARE INCLUDED, CARRYING THEIR FLAG, exactly as they do inside `runs` and
+  // `batches` — the server never lies about what exists and the client filters.
+  //
+  // BATCH-HUNG (UPLOADED) PICTURES OF THESE KINDS ARE INCLUDED TOO. An uploaded render is a render
+  // of this card, and `selected` writes against any picture id — a plate that cannot be listed
+  // cannot be chosen. Such a row carries run_id 0, run_kind "" and a batch_id.
+  //
+  // ORDER: newest picture first (design_picture.id descending).
+  //
+  // ⚠ ABSENT ≠ EMPTY, and a client must keep the distinction. The gateway emits unpopulated
+  // fields, so a server that knows this field always sends at least `[]`; nothing at all means a
+  // binary older than the field, where the page-bound reading is still the only answer available.
+  repeated common.DesignCardOutput outputs = 21;
+  // How many generative outputs the card has IN TOTAL, counted over the whole card in the same
+  // read. Equal to len(outputs) until the 200 ceiling is reached; above it, the difference is what
+  // the response could not carry, and it is stated rather than hidden.
+  int32 outputs_total = 22;
 }
 
 message ListDesignRunsRequest {

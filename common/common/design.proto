@@ -739,6 +739,38 @@ message DesignBatch {
   repeated DesignPicture pictures = 8;
 }
 
+// DesignCardOutput is ONE generative output of the card, carrying the minimal facts of the run it
+// came out of.
+//
+// WHY THE STAMP EXISTS AT ALL. This list is deliberately NOT page-bound (see
+// GetDesignBandResponse.outputs), so the run a picture came out of may be nowhere in the response.
+// Two facts are then unrecoverable from the picture alone and both are load-bearing:
+//
+//   * WHICH SECTION IT BELONGS TO. A recolour run produces pictures whose own kind is `render` —
+//     that is true rather than a shortcut, the output IS a photograph of the garment — so a client
+//     reading picture.kind files an ON MODEL result under RENDERS and the two sections lie about
+//     each other. run_kind is the only place the difference survives.
+//   * WHICH COLOURWAY AND WHICH REVISION. Both live on the run, and a picture that was filed
+//     before the colourway axis carries 0 for a reason different from a picture whose colourway
+//     was deleted; the run's own colourway is what the narrowing must read.
+//
+// A picture that hangs under an upload batch rather than a run answers run_id 0 and run_kind "" —
+// nobody generated it, so there is no stamp to make up. It is classified by picture.kind, and
+// batch_id says where it came from.
+message DesignCardOutput {
+  DesignPicture picture = 1;
+  int32 run_id = 2; // FK design_run(id); 0 for a batch-hung (uploaded) picture
+  // render | threed | pattern | recolor — the kind of the RUN, never of the picture. "" for a
+  // batch-hung picture, which has no run at all.
+  string run_kind = 3;
+  int32 run_rrev = 4; // the render revision of that run; 0 when there is no run
+  // The run's colourway — product(id), 0 = unattributed or no run. It is the RUN's colourway and
+  // not the picture's on purpose: a crop inherits its parent's, and the run is where the axis was
+  // decided.
+  int32 run_colorway_id = 5;
+  int32 batch_id = 6; // FK design_batch(id); 0 for a run output
+}
+
 // DesignReference is the ROLE of one reference image inside the band's prompt: which side of the
 // garment this reference is about, and in what order it is fed.
 //
