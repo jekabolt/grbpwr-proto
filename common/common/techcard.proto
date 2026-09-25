@@ -3575,6 +3575,11 @@ message TechCard {
   string fit = 15;
   string composition = 16;
   string care_instructions = 17;
+  // age_group is a style catalogue fact like fit above (0366): stored on the tech_card row but
+  // WRITTEN via UpdateStyle (StylePatch.age_group), so it is a read-only projection here, surfaced
+  // for the constructor to display and edit-in-place. UNKNOWN = not set (NULL, the state of every
+  // style predating 0366 until someone picks one) or a stored token this build cannot map.
+  AgeGroupEnum age_group = 29;
   // care_entries is the STRUCTURED projection of care_instructions above, resolved against the
   // care_symbol dictionary and always in canonical print order. care_instructions keeps holding the
   // raw comma-joined codes; render entries when present and fall back to the string for rows that
@@ -4359,4 +4364,9 @@ message TechCardListItem {
   // нет (такие существуют намеренно). Колонки-ссылки collection_id у тех-карты не существует —
   // её дропнула 0240 как мёртвую схему, поэтому фильтровать можно ТОЛЬКО по этой строке.
   string collection = 28;
+  // Age group of the style (0366), mirroring TechCard.age_group. Together with target_gender (7) it
+  // is the row's audience, so a list/board can label and group by it without an N+1 GetTechCard.
+  // Read-only here — written only via UpdateStyle. UNKNOWN = not set (NULL column) or a stored token
+  // this build cannot map; never a stand-in for ADULT.
+  AgeGroupEnum age_group = 29;
 }
