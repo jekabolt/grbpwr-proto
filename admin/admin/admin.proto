@@ -12568,7 +12568,8 @@ message FlattenDesignEditLayerRequest {
   // picture's replacement chain, i.e. the picture standing in its place now. FailedPrecondition:
   // cut_sheet — visible pieces are cut from this sheet, and they would stay cut from the original;
   // a piece that was itself overwritten by an edit still counts, since that edit was drawn over the
-  // old pixels too. Hide the pieces, or edit them, first. NotFound — no such picture.
+  // old pixels too. Hide those pieces before overwriting the sheet, or edit a piece instead of the
+  // sheet. NotFound — no such picture.
   //
   // ⚠ AN OLDER SERVER ANSWERS 400 TO THIS FIELD: the JSON gateway refuses unknown fields. Send it
   // only after a read has carried DesignPicture.replaced_by, which an older server never emits.
