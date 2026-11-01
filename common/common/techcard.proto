@@ -4107,13 +4107,13 @@ message TechCardSeamAnchor {
   // the client places the piece geometrically.
   TechCardSeamPlacement placement = 11;
   // Which way THIS anchor's piece lies against the other side's pieces in the step that sews the
-  // row (the owner's under/over switch). UNSPECIFIED = the client's own rule, as before.
+  // row (the owner's under/over switch). UNKNOWN = unset: the client's own rule, as before.
   TechCardSeamLayer layer = 12;
 }
 
 // TechCardSeamLayer is an explicit stacking of a seam side's piece: under or over the other side.
 enum TechCardSeamLayer {
-  TECH_CARD_SEAM_LAYER_UNSPECIFIED = 0;
+  TECH_CARD_SEAM_LAYER_UNKNOWN = 0;
   TECH_CARD_SEAM_LAYER_UNDER = 1;
   TECH_CARD_SEAM_LAYER_OVER = 2;
 }
