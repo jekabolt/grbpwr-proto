@@ -3543,7 +3543,7 @@ message TechCardPieceDxfAliasSet {
 // itself always stays in start_mm / end_mm as base-size millimetres; the mode only tells the size
 // carry-over what to hold constant.
 enum TechCardPieceFusingEndMode {
-  TECH_CARD_PIECE_FUSING_END_MODE_UNKNOWN = 0; // unset, read as MM (every edge stored before this field)
+  TECH_CARD_PIECE_FUSING_END_MODE_UNKNOWN = 0; // write only: keep the stored mode of this edge (MM when none); reads never return it
   TECH_CARD_PIECE_FUSING_END_MODE_MM = 1; // the same millimetres from the corner on every size
   TECH_CARD_PIECE_FUSING_END_MODE_NOTCH = 2; // ends at the notch nearest to the base-size trim, on every size
   TECH_CARD_PIECE_FUSING_END_MODE_SHARE = 3; // the same share of the edge length on every size
@@ -3582,7 +3582,7 @@ message TechCardPieceFusingSplinePoint {
 
 // How one fusing ring is carried from the base size to the other sizes.
 enum TechCardPieceFusingGradeMode {
-  TECH_CARD_PIECE_FUSING_GRADE_MODE_UNKNOWN = 0; // unset, read as FIXED (every ring stored before this field)
+  TECH_CARD_PIECE_FUSING_GRADE_MODE_UNKNOWN = 0; // write only: an unchanged ring keeps its stored mode (FIXED when none); reads never return it
   TECH_CARD_PIECE_FUSING_GRADE_MODE_FIXED = 1; // keeps its millimetre shape
   TECH_CARD_PIECE_FUSING_GRADE_MODE_FOLLOW_LINE = 2; // keeps its shape, travels and rotates with the internal line at anchor
   TECH_CARD_PIECE_FUSING_GRADE_MODE_GROW = 3; // scales with the piece
