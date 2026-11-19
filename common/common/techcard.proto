@@ -4511,7 +4511,7 @@ enum TechCardSeamPointClosureIntent {
 // DXF after reading. A decoded PathId by itself is not a durable entity identity.
 message TechCardSeamPointClosureAnchor {
   string pattern_line_key = 1;
-  uint64 saved_row_revision = 2;
+  uint32 saved_row_revision = 2;
   string dxf_sha256 = 3;
   int32 size_id = 4;
   string alias_block_name = 5;
